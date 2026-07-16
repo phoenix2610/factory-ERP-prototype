@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Product — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <h1 class="page-title" id="page-heading">➕ Add Product</h1>
+          <p style="color:var(--text-muted);margin-top:0.25rem;">Fill in the product details below</p>
+        </div>
+        <a href="/pages/inventory/index.html" class="btn btn-ghost">← Back to Inventory</a>
+      </div>
+
+      <div class="grid-2" style="gap:1.5rem;align-items:start;">
+
+        <!-- Main Form -->
+        <div class="card">
+          <div class="card-header"><strong>Product Details</strong></div>
+          <div class="card-body">
+
+            <div class="form-group">
+              <label class="form-label">Product Name *</label>
+              <input type="text" class="form-input" id="product-name" placeholder="e.g. MDF Board 18mm">
+              <span class="form-error" id="name-error" style="display:none;">Product name is required.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">SKU *</label>
+              <div style="display:flex;gap:0.5rem;">
+                <input type="text" class="form-input" id="product-sku" placeholder="e.g. MDF-0032" style="flex:1;">
+                <button class="btn btn-ghost btn-sm" onclick="autoSKU()" title="Auto-generate SKU">🔄 Auto</button>
+              </div>
+              <span class="form-error" id="sku-error" style="display:none;">SKU is required.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Category *</label>
+              <select class="form-select" id="product-category" onchange="loadSubcategories()">
+                <option value="">Select Category</option>
+              </select>
+              <span class="form-error" id="cat-error" style="display:none;">Category is required.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Subcategory</label>
+              <select class="form-select" id="product-subcategory">
+                <option value="">Select Subcategory</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Unit *</label>
+              <select class="form-select" id="product-unit">
+                <option value="">Select Unit</option>
+                <option value="kg">kg</option>
+                <option value="pcs">pcs</option>
+                <option value="liters">liters</option>
+                <option value="meters">meters</option>
+                <option value="sheet">sheet</option>
+                <option value="box">box</option>
+                <option value="carton">carton</option>
+              </select>
+              <span class="form-error" id="unit-error" style="display:none;">Unit is required.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Description</label>
+              <textarea class="form-textarea" id="product-description" rows="3" placeholder="Optional product notes..."></textarea>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Stock & Price -->
+        <div style="display:flex;flex-direction:column;gap:1.5rem;">
+          <div class="card">
+            <div class="card-header"><strong>Stock & Pricing</strong></div>
+            <div class="card-body">
+
+              <div class="form-group">
+                <label class="form-label">Current Stock *</label>
+                <input type="number" class="form-input" id="product-stock" min="0" placeholder="0">
+                <span class="form-error" id="stock-error" style="display:none;">Stock quantity is required.</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Reorder Level *</label>
+                <input type="number" class="form-input" id="product-reorder" min="0" placeholder="e.g. 20">
+                <span class="form-error" id="reorder-error" style="display:none;">Reorder level is required.</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Price (₹) *</label>
+                <input type="number" class="form-input" id="product-price" min="0" step="0.01" placeholder="0.00">
+                <span class="form-error" id="price-error" style="display:none;">Price is required.</span>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Stock Status Preview -->
+          <div class="card" id="status-preview-card" style="display:none;">
+            <div class="card-header"><strong>Stock Status Preview</strong></div>
+            <div class="card-body" style="text-align:center;">
+              <div id="status-preview-badge"></div>
+              <p style="color:var(--text-muted);font-size:0.85rem;margin-top:0.5rem;" id="status-preview-text"></p>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div style="display:flex;gap:0.75rem;">
+            <button class="btn btn-primary" onclick="saveProduct()" style="flex:1;">💾 Save Product</button>
+            <a href="/pages/inventory/index.html" class="btn btn-ghost" style="flex:1;text-align:center;">Cancel</a>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const productId = urlParams.get('id');
+    let editProduct = null;
+
+    // Populate categories
+    function populateCategories() {
+      const sel = document.getElementById('product-category');
+      MockData.categories.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat.name;
+        opt.textContent = cat.name;
+        sel.appendChild(opt);
+      });
+    }
+
+    // Load subcategories when category changes
+    function loadSubcategories(selectedSub = '') {
+      const catName = document.getElementById('product-category').value;
+      const subSel = document.getElementById('product-subcategory');
+      subSel.innerHTML = '<option value="">Select Subcategory</option>';
+      const cat = MockData.categories.find(c => c.name === catName);
+      if (cat && cat.subcategories) {
+        cat.subcategories.forEach(sub => {
+          const opt = document.createElement('option');
+          opt.value = sub;
+          opt.textContent = sub;
+          if (sub === selectedSub) opt.selected = true;
+          subSel.appendChild(opt);
+        });
+      }
+    }
+
+    // Auto-generate SKU from name
+    function autoSKU() {
+      const name = document.getElementById('product-name').value;
+      if (!name.trim()) { showToast('Enter a product name first', 'warning'); return; }
+      document.getElementById('product-sku').value = generateSKU(name);
+    }
+
+    // Update status preview
+    function updateStatusPreview() {
+      const stock = parseInt(document.getElementById('product-stock').value) || 0;
+      const reorder = parseInt(document.getElementById('product-reorder').value) || 0;
+      const card = document.getElementById('status-preview-card');
+      const badge = document.getElementById('status-preview-badge');
+      const text = document.getElementById('status-preview-text');
+
+      card.style.display = 'block';
+      if (stock === 0) {
+        badge.innerHTML = '<span class="badge badge-danger">Out of Stock</span>';
+        text.textContent = 'No stock available. Immediate reorder needed.';
+      } else if (stock <= reorder) {
+        badge.innerHTML = '<span class="badge badge-warning">Low Stock</span>';
+        text.textContent = \`Stock (\${stock}) is at or below reorder level (\${reorder}).\`;
+      } else {
+        badge.innerHTML = '<span class="badge badge-success">In Stock</span>';
+        text.textContent = \`Stock is healthy. Reorder when it drops to \${reorder}.\`;
+      }
+    }
+
+    document.getElementById('product-stock').addEventListener('input', updateStatusPreview);
+    document.getElementById('product-reorder').addEventListener('input', updateStatusPreview);
+
+    // Pre-fill in edit mode
+    if (productId) {
+      editProduct = MockData.products.find(p => p.id == productId);
+      if (editProduct) {
+        document.getElementById('page-heading').textContent = '✏️ Edit Product';
+        document.title = 'Edit Product — Factory ERP';
+        populateCategories();
+        document.getElementById('product-name').value = editProduct.name;
+        document.getElementById('product-sku').value = editProduct.sku;
+        document.getElementById('product-category').value = editProduct.category;
+        loadSubcategories(editProduct.subcategory || '');
+        document.getElementById('product-unit').value = editProduct.unit;
+        document.getElementById('product-stock').value = editProduct.stock;
+        document.getElementById('product-reorder').value = editProduct.reorderLevel;
+        document.getElementById('product-price').value = editProduct.price;
+        document.getElementById('product-description').value = editProduct.description || '';
+        updateStatusPreview();
+      }
+    } else {
+      populateCategories();
+    }
+
+    // Validation
+    function validate() {
+      let valid = true;
+      const fields = [
+        { id: 'product-name', errId: 'name-error', msg: 'Product name is required.' },
+        { id: 'product-sku', errId: 'sku-error', msg: 'SKU is required.' },
+        { id: 'product-category', errId: 'cat-error', msg: 'Category is required.' },
+        { id: 'product-unit', errId: 'unit-error', msg: 'Unit is required.' },
+        { id: 'product-stock', errId: 'stock-error', msg: 'Stock quantity is required.' },
+        { id: 'product-reorder', errId: 'reorder-error', msg: 'Reorder level is required.' },
+        { id: 'product-price', errId: 'price-error', msg: 'Price is required.' },
+      ];
+
+      fields.forEach(f => {
+        const el = document.getElementById(f.id);
+        const err = document.getElementById(f.errId);
+        if (!el.value.toString().trim()) {
+          err.textContent = f.msg;
+          err.style.display = 'block';
+          el.style.borderColor = 'var(--danger)';
+          valid = false;
+        } else {
+          err.style.display = 'none';
+          el.style.borderColor = '';
+        }
+      });
+      return valid;
+    }
+
+    // Save product
+    function saveProduct() {
+      if (!validate()) { showToast('Please fix the errors above', 'error'); return; }
+
+      const productData = {
+        name: document.getElementById('product-name').value.trim(),
+        sku: document.getElementById('product-sku').value.trim(),
+        category: document.getElementById('product-category').value,
+        subcategory: document.getElementById('product-subcategory').value,
+        unit: document.getElementById('product-unit').value,
+        stock: parseInt(document.getElementById('product-stock').value),
+        reorderLevel: parseInt(document.getElementById('product-reorder').value),
+        price: parseFloat(document.getElementById('product-price').value),
+        description: document.getElementById('product-description').value.trim(),
+      };
+
+      if (editProduct) {
+        // Update existing
+        Object.assign(editProduct, productData);
+        showToast('Product updated successfully!', 'success');
+      } else {
+        // Create new
+        const newId = Math.max(...MockData.products.map(p => p.id), 0) + 1;
+        MockData.products.push({ id: newId, ...productData });
+        showToast('Product added successfully!', 'success');
+      }
+
+      setTimeout(() => { window.location.href = '/pages/inventory/index.html'; }, 1000);
+    }
+  </script>
+</body>
+</html>

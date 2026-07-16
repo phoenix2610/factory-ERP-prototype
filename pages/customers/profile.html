@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Profile — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <h1 class="page-title" id="page-title">Customer Profile</h1>
+          <p style="color:var(--text-muted);margin-top:0.25rem;">View purchase history and udhaar ledger</p>
+        </div>
+        <a href="/pages/customers/index.html" class="btn btn-ghost">← Back to Customers</a>
+      </div>
+
+      <div id="not-found" style="display:none;">
+        <div class="card">
+          <div class="card-body" style="text-align:center;padding:3rem;">
+            <div style="font-size:3rem;margin-bottom:1rem;">❌</div>
+            <h2>Customer Not Found</h2>
+            <p style="color:var(--text-muted);">The customer you're looking for doesn't exist.</p>
+            <a href="/pages/customers/index.html" class="btn btn-primary" style="margin-top:1rem;">Go Back</a>
+          </div>
+        </div>
+      </div>
+
+      <div id="profile-content" style="display:none;">
+
+        <!-- Customer Info Card -->
+        <div class="grid-2" style="gap:1.5rem;margin-bottom:1.5rem;align-items:start;">
+          <div class="card">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+              <strong>Customer Info</strong>
+              <button class="btn btn-ghost btn-sm" onclick="openEditModal()">✏️ Edit</button>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;gap:1rem;align-items:center;margin-bottom:1.25rem;">
+                <div style="width:60px;height:60px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;color:white;" id="customer-avatar">—</div>
+                <div>
+                  <div style="font-size:1.2rem;font-weight:700;" id="customer-name">—</div>
+                  <div style="color:var(--text-muted);font-size:0.875rem;" id="customer-since">Member since —</div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                <div>
+                  <p style="color:var(--text-muted);font-size:0.75rem;">Phone</p>
+                  <p style="font-weight:500;" id="customer-phone">—</p>
+                </div>
+                <div>
+                  <p style="color:var(--text-muted);font-size:0.75rem;">Credit Limit</p>
+                  <p style="font-weight:500;" id="customer-credit">—</p>
+                </div>
+                <div style="grid-column:1/-1;">
+                  <p style="color:var(--text-muted);font-size:0.75rem;">Address</p>
+                  <p style="font-weight:500;" id="customer-address">—</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Udhaar Card -->
+          <div class="card">
+            <div class="card-header"><strong>💳 Udhaar Ledger</strong></div>
+            <div class="card-body">
+              <div style="text-align:center;padding:1rem 0;border-bottom:1px solid var(--border);margin-bottom:1rem;">
+                <div style="font-size:0.8rem;color:var(--text-muted);">Outstanding Balance</div>
+                <div style="font-size:2.5rem;font-weight:700;" id="udhaar-balance">—</div>
+              </div>
+              <button class="btn btn-primary" onclick="openPaymentModal()" style="width:100%;">💰 Record Payment</button>
+
+              <div style="margin-top:1rem;">
+                <p style="font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.5rem;">RECENT TRANSACTIONS</p>
+                <div id="udhaar-transactions" style="max-height:150px;overflow-y:auto;">
+                  <!-- Filled by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Purchase History -->
+        <div class="card">
+          <div class="card-header"><strong>Purchase History</strong></div>
+          <div class="card-body" style="padding:0;">
+            <table class="table-base" style="width:100%;">
+              <thead>
+                <tr><th>Invoice No</th><th>Date</th><th>Items</th><th>Amount</th><th>Payment</th><th>Status</th></tr>
+              </thead>
+              <tbody id="purchase-history-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const customerId = parseInt(urlParams.get('id'));
+    let customer = null;
+
+    if (!MockData.udhaarLedger) MockData.udhaarLedger = [];
+
+    function init() {
+      customer = (MockData.customers || []).find(c => c.id === customerId);
+
+      if (!customer) {
+        document.getElementById('not-found').style.display = 'block';
+        return;
+      }
+
+      document.getElementById('profile-content').style.display = 'block';
+      document.getElementById('page-title').textContent = \`👤 \${customer.name}\`;
+      document.title = \`\${customer.name} — Factory ERP\`;
+
+      renderProfile();
+      renderPurchaseHistory();
+      renderUdhaarTransactions();
+    }
+
+    function renderProfile() {
+      const initials = customer.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      document.getElementById('customer-avatar').textContent = initials;
+      document.getElementById('customer-name').textContent = customer.name;
+      document.getElementById('customer-since').textContent = customer.joinDate ? \`Member since \${formatDate(customer.joinDate)}\` : 'Member';
+      document.getElementById('customer-phone').textContent = customer.phone || '—';
+      document.getElementById('customer-credit').textContent = formatCurrency(customer.creditLimit || 0);
+      document.getElementById('customer-address').textContent = customer.address || '—';
+
+      const udhaar = customer.udhaarBalance || 0;
+      const balEl = document.getElementById('udhaar-balance');
+      balEl.textContent = formatCurrency(udhaar);
+      balEl.style.color = udhaar > 0 ? 'var(--danger)' : 'var(--success)';
+    }
+
+    function renderPurchaseHistory() {
+      const invoices = (MockData.invoices || [])
+        .filter(i => i.customerId == customerId)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      const tbody = document.getElementById('purchase-history-tbody');
+      if (invoices.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No purchase history found.</td></tr>\`;
+        return;
+      }
+
+      const STATUS_BADGES = {
+        paid: '<span class="badge badge-success">Paid</span>',
+        pending: '<span class="badge badge-warning">Pending</span>',
+        cancelled: '<span class="badge badge-danger">Cancelled</span>',
+      };
+      const PAY_ICONS = { cash: '💵', upi: '📱', card: '💳' };
+
+      tbody.innerHTML = invoices.map(inv => \`
+        <tr>
+          <td><strong>\${inv.invoiceNo || \`INV-\${String(inv.id).padStart(5,'0')}\`}</strong></td>
+          <td>\${formatDate(inv.date)}</td>
+          <td>\${(inv.items || []).length} items</td>
+          <td style="font-weight:600;">\${formatCurrency(inv.total || 0)}</td>
+          <td>\${PAY_ICONS[inv.paymentMode] || ''} \${(inv.paymentMode || '—').toUpperCase()}</td>
+          <td>\${STATUS_BADGES[inv.status] || inv.status}</td>
+        </tr>
+      \`).join('');
+    }
+
+    function renderUdhaarTransactions() {
+      const transactions = (MockData.udhaarLedger || [])
+        .filter(t => t.customerId === customerId)
+        .reverse()
+        .slice(0, 5);
+
+      const container = document.getElementById('udhaar-transactions');
+      if (transactions.length === 0) {
+        container.innerHTML = \`<p style="color:var(--text-muted);font-size:0.8rem;text-align:center;">No transactions recorded</p>\`;
+        return;
+      }
+
+      container.innerHTML = transactions.map(t => \`
+        <div style="display:flex;justify-content:space-between;padding:0.375rem 0;border-bottom:1px solid var(--border);font-size:0.8rem;">
+          <span style="color:var(--text-muted);">\${formatDate(t.date)}</span>
+          <span style="\${t.type === 'payment' ? 'color:var(--success)' : 'color:var(--danger)'};">
+            \${t.type === 'payment' ? '-' : '+'}\${formatCurrency(t.amount)}
+          </span>
+        </div>
+      \`).join('');
+    }
+
+    function openPaymentModal() {
+      openModal('Record Payment', \`
+        <p style="color:var(--text-muted);">Outstanding: <strong style="color:var(--danger);">\${formatCurrency(customer.udhaarBalance || 0)}</strong></p>
+        <div class="form-group" style="margin-top:1rem;">
+          <label class="form-label">Payment Amount (₹) *</label>
+          <input type="number" class="form-input" id="payment-amt" min="1" placeholder="Enter amount">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payment Mode</label>
+          <select class="form-select" id="payment-mode">
+            <option value="Cash">Cash</option>
+            <option value="UPI">UPI</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <input type="text" class="form-input" id="payment-notes" placeholder="Reference or remarks...">
+        </div>
+        <div style="display:flex;gap:0.75rem;margin-top:1rem;">
+          <button class="btn btn-primary" onclick="recordPayment()">Record Payment</button>
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        </div>
+      \`);
+    }
+
+    function recordPayment() {
+      const amt = parseFloat(document.getElementById('payment-amt').value);
+      if (!amt || amt <= 0) { showToast('Enter a valid amount', 'warning'); return; }
+
+      customer.udhaarBalance = Math.max(0, (customer.udhaarBalance || 0) - amt);
+
+      if (!MockData.udhaarLedger) MockData.udhaarLedger = [];
+      MockData.udhaarLedger.push({
+        customerId,
+        type: 'payment',
+        amount: amt,
+        mode: document.getElementById('payment-mode').value,
+        notes: document.getElementById('payment-notes').value,
+        date: new Date().toISOString().split('T')[0],
+      });
+
+      closeModal();
+      showToast(\`Payment of \${formatCurrency(amt)} recorded!\`, 'success');
+      renderProfile();
+      renderUdhaarTransactions();
+    }
+
+    function openEditModal() {
+      openModal('Edit Customer', \`
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" class="form-input" id="ec-name" value="\${customer.name}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone</label>
+          <input type="tel" class="form-input" id="ec-phone" value="\${customer.phone || ''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Address</label>
+          <textarea class="form-textarea" id="ec-address" rows="2">\${customer.address || ''}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Credit Limit (₹)</label>
+          <input type="number" class="form-input" id="ec-credit" value="\${customer.creditLimit || 0}">
+        </div>
+        <div style="display:flex;gap:0.75rem;margin-top:1rem;">
+          <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        </div>
+      \`);
+    }
+
+    function saveEdit() {
+      customer.name = document.getElementById('ec-name').value.trim() || customer.name;
+      customer.phone = document.getElementById('ec-phone').value.trim();
+      customer.address = document.getElementById('ec-address').value.trim();
+      customer.creditLimit = parseFloat(document.getElementById('ec-credit').value) || 0;
+      closeModal();
+      showToast('Customer updated!', 'success');
+      renderProfile();
+      document.getElementById('page-title').textContent = \`👤 \${customer.name}\`;
+    }
+
+    init();
+  </script>
+</body>
+</html>

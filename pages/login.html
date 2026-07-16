@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — Factory ERP</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <link rel="stylesheet" href="../assets/css/components.css" />
+  <style>
+    /* Login page is full-screen centered — no sidebar/topbar */
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+      padding: 20px;
+    }
+
+    .login-wrapper {
+      display: flex;
+      width: 100%;
+      max-width: 900px;
+      min-height: 520px;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+    }
+
+    /* Left panel — branding */
+    .login-brand {
+      flex: 1;
+      background: linear-gradient(160deg, #1e3a5f 0%, #2563eb 100%);
+      padding: 48px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      color: white;
+    }
+
+    .login-brand-logo {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+    }
+
+    .login-brand-name {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 8px;
+    }
+
+    .login-brand-tagline {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.7);
+      line-height: 1.6;
+    }
+
+    .login-brand-features {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .login-brand-features li {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.85);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .login-brand-features li::before {
+      content: '✓';
+      width: 18px;
+      height: 18px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* Right panel — form */
+    .login-form-panel {
+      width: 380px;
+      background: #ffffff;
+      padding: 48px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .login-form-panel h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 6px;
+    }
+
+    .login-subtitle {
+      font-size: 0.875rem;
+      color: #64748b;
+      margin-bottom: 28px;
+    }
+
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Demo accounts hint */
+    .demo-hint {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 20px;
+    }
+
+    .demo-hint-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #1d4ed8;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+
+    .demo-accounts {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .demo-account-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: white;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      color: #1e3a5f;
+      transition: background 0.15s;
+      gap: 8px;
+    }
+
+    .demo-account-btn:hover {
+      background: #dbeafe;
+    }
+
+    .demo-account-role {
+      font-size: 0.7rem;
+      background: #dbeafe;
+      color: #1d4ed8;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 11px;
+      font-size: 0.95rem;
+      border-radius: 8px;
+      margin-top: 4px;
+    }
+
+    /* Inline error */
+    #login-error {
+      display: none;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      color: #b91c1c;
+    }
+
+    @media (max-width: 640px) {
+      .login-brand { display: none; }
+      .login-form-panel { width: 100%; }
+      .login-wrapper { max-width: 400px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-wrapper">
+
+    <!-- Left: Brand Panel -->
+    <div class="login-brand">
+      <div>
+        <div class="login-brand-logo">🏭</div>
+        <div class="login-brand-name">Factory ERP</div>
+        <p class="login-brand-tagline">Complete operations management for modern manufacturing businesses.</p>
+      </div>
+
+      <ul class="login-brand-features">
+        <li>Inventory & Stock Management</li>
+        <li>Production Kanban & Work Orders</li>
+        <li>Sales, POS & Invoice Generation</li>
+        <li>Purchase & Supplier Management</li>
+        <li>Employee & Attendance Tracking</li>
+        <li>Reports & Analytics Dashboard</li>
+      </ul>
+
+      <div style="font-size:0.75rem; color:rgba(255,255,255,0.4);">
+        Prototype v0.2 — Demo Environment
+      </div>
+    </div>
+
+    <!-- Right: Login Form -->
+    <div class="login-form-panel">
+      <h2>Welcome back</h2>
+      <p class="login-subtitle">Sign in to your Factory ERP account</p>
+
+      <!-- Demo Account Quick-Fill Buttons -->
+      <div class="demo-hint">
+        <div class="demo-hint-title">🚀 Demo Accounts — Click to fill</div>
+        <div class="demo-accounts">
+          <button class="demo-account-btn" onclick="fillDemo('admin@factory.demo','admin123')">
+            <span>admin@factory.demo</span>
+            <span class="demo-account-role">Admin</span>
+          </button>
+          <button class="demo-account-btn" onclick="fillDemo('manager@factory.demo','manager123')">
+            <span>manager@factory.demo</span>
+            <span class="demo-account-role">Manager</span>
+          </button>
+          <button class="demo-account-btn" onclick="fillDemo('staff@factory.demo','staff123')">
+            <span>staff@factory.demo</span>
+            <span class="demo-account-role">Staff</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div id="login-error" role="alert"></div>
+
+      <!-- Form -->
+      <form class="login-form" id="login-form" onsubmit="handleLogin(event)">
+
+        <div class="form-group">
+          <label class="form-label" for="email">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            class="form-input"
+            placeholder="you@factory.demo"
+            autocomplete="email"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            class="form-input"
+            placeholder="Enter your password"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+
+        <button type="submit" class="btn btn-primary login-btn" id="login-btn">
+          Sign In →
+        </button>
+
+      </form>
+    </div>
+
+  </div>
+
+  <script src="../assets/js/auth.js"></script>
+  <script>
+    // If already logged in, skip login page
+    (function () {
+      if (getCurrentUser()) {
+        window.location.href = '/pages/dashboard.html';
+      }
+    })();
+
+    /**
+     * Fill email + password from demo account quick-fill button.
+     */
+    function fillDemo(email, password) {
+      document.getElementById('email').value    = email;
+      document.getElementById('password').value = password;
+      document.getElementById('login-error').style.display = 'none';
+      document.getElementById('email').focus();
+    }
+
+    /**
+     * Handle login form submission.
+     */
+    function handleLogin(e) {
+      e.preventDefault();
+
+      const email    = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const errorEl  = document.getElementById('login-error');
+      const loginBtn = document.getElementById('login-btn');
+
+      // Loading state
+      loginBtn.disabled    = true;
+      loginBtn.textContent = 'Signing in...';
+      errorEl.style.display = 'none';
+
+      // Small delay for UX feel
+      setTimeout(() => {
+        const result = loginUser(email, password);
+
+        if (result.success) {
+          loginBtn.textContent = '✓ Redirecting...';
+          window.location.href = '/pages/dashboard.html';
+        } else {
+          errorEl.textContent   = result.message;
+          errorEl.style.display = 'block';
+          loginBtn.disabled     = false;
+          loginBtn.textContent  = 'Sign In →';
+
+          // Shake input on error
+          document.getElementById('password').value = '';
+          document.getElementById('password').focus();
+        }
+      }, 400);
+    }
+  </script>
+
+</body>
+</html>
+

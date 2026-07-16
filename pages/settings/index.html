@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <style>
+    .settings-layout { display:grid; grid-template-columns:220px 1fr; gap:1.5rem; align-items:start; }
+    @media(max-width:750px){ .settings-layout { grid-template-columns:1fr; } }
+    .settings-nav { background:#fff; border:1px solid var(--border); border-radius:10px; overflow:hidden; position:sticky; top:1rem; }
+    .settings-nav-item { display:flex; align-items:center; gap:.75rem; padding:.875rem 1rem; cursor:pointer; font-size:.875rem; font-weight:500; color:#555; border-left:3px solid transparent; transition:all .15s; }
+    .settings-nav-item:hover { background:var(--bg); color:var(--primary); }
+    .settings-nav-item.active { background:#f0f7ff; color:var(--primary); border-left-color:var(--primary); font-weight:600; }
+    .settings-nav-item .nav-icon { font-size:1.1rem; }
+    .settings-section { display:none; }
+    .settings-section.active { display:block; }
+    .section-card { background:#fff; border:1px solid var(--border); border-radius:10px; margin-bottom:1.25rem; overflow:hidden; }
+    .section-card-header { padding:1rem 1.25rem; border-bottom:1px solid var(--border); font-weight:700; font-size:.95rem; }
+    .section-card-body { padding:1.25rem; }
+    .setting-row { display:flex; align-items:center; justify-content:space-between; padding:.875rem 0; border-bottom:1px solid var(--border); gap:1rem; }
+    .setting-row:last-child { border-bottom:none; }
+    .setting-info .setting-label { font-weight:600; font-size:.875rem; }
+    .setting-info .setting-desc { font-size:.75rem; color:#888; margin-top:2px; }
+    .toggle-switch { position:relative; width:44px; height:24px; flex-shrink:0; }
+    .toggle-switch input { opacity:0; width:0; height:0; }
+    .toggle-slider { position:absolute; cursor:pointer; inset:0; background:#d1d5db; border-radius:24px; transition:.3s; }
+    .toggle-slider::before { content:''; position:absolute; width:18px; height:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
+    input:checked + .toggle-slider { background:var(--primary); }
+    input:checked + .toggle-slider::before { transform:translateX(20px); }
+    .danger-zone { border-color:#fca5a5 !important; }
+    .danger-zone .section-card-header { background:#fff5f5; color:#b91c1c; border-bottom-color:#fca5a5; }
+    .color-swatch { width:28px; height:28px; border-radius:6px; border:2px solid transparent; cursor:pointer; transition:all .15s; }
+    .color-swatch.selected { border-color:#1e293b; transform:scale(1.15); }
+    .user-chip { display:flex; align-items:center; gap:.75rem; padding:.75rem; background:var(--bg); border-radius:8px; margin-bottom:.5rem; }
+    .user-avatar { width:36px; height:36px; border-radius:50%; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.8rem; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <div style="margin-bottom:1.5rem;">
+        <h1 style="font-size:1.5rem;font-weight:700;margin:0;">⚙️ Settings</h1>
+        <p style="color:#888;font-size:.875rem;margin:4px 0 0;">Configure your Factory ERP preferences</p>
+      </div>
+
+      <div class="settings-layout">
+        <!-- Sidebar Nav -->
+        <nav class="settings-nav">
+          <div class="settings-nav-item active" onclick="showSection('general',this)">
+            <span class="nav-icon">🏭</span> General
+          </div>
+          <div class="settings-nav-item" onclick="showSection('appearance',this)">
+            <span class="nav-icon">🎨</span> Appearance
+          </div>
+          <div class="settings-nav-item" onclick="showSection('users',this)">
+            <span class="nav-icon">👥</span> Users & Roles
+          </div>
+          <div class="settings-nav-item" onclick="showSection('notifications',this)">
+            <span class="nav-icon">🔔</span> Notifications
+          </div>
+          <div class="settings-nav-item" onclick="showSection('inventory-settings',this)">
+            <span class="nav-icon">📦</span> Inventory
+          </div>
+          <div class="settings-nav-item" onclick="showSection('data',this)">
+            <span class="nav-icon">🗄️</span> Data & Export
+          </div>
+          <div class="settings-nav-item" onclick="showSection('danger',this)">
+            <span class="nav-icon">⚠️</span> Danger Zone
+          </div>
+        </nav>
+
+        <!-- Sections -->
+        <div>
+
+          <!-- General -->
+          <div class="settings-section active" id="section-general">
+            <div class="section-card">
+              <div class="section-card-header">Company Information</div>
+              <div class="section-card-body">
+                <div class="form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                  <div class="form-group">
+                    <label class="form-label">Company Name</label>
+                    <input type="text" class="form-input" id="company-name" value="My Factory Ltd.">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">GSTIN</label>
+                    <input type="text" class="form-input" id="company-gstin" placeholder="22AAAAA0000A1Z5">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Phone</label>
+                    <input type="tel" class="form-input" id="company-phone" placeholder="+91 98765 43210">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="company-email" placeholder="info@factory.com">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Address</label>
+                  <textarea class="form-textarea" id="company-address" rows="2" placeholder="Factory address..."></textarea>
+                </div>
+                <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+                  <div class="form-group" style="flex:1;min-width:140px;">
+                    <label class="form-label">Currency</label>
+                    <select class="form-select" id="currency">
+                      <option value="INR" selected>₹ INR</option>
+                      <option value="USD">$ USD</option>
+                      <option value="EUR">€ EUR</option>
+                    </select>
+                  </div>
+                  <div class="form-group" style="flex:1;min-width:140px;">
+                    <label class="form-label">Date Format</label>
+                    <select class="form-select" id="date-format">
+                      <option value="DD/MM/YYYY" selected>DD/MM/YYYY</option>
+                      <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                      <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                    </select>
+                  </div>
+                  <div class="form-group" style="flex:1;min-width:140px;">
+                    <label class="form-label">Financial Year Start</label>
+                    <select class="form-select" id="fy-start">
+                      <option value="April" selected>April</option>
+                      <option value="January">January</option>
+                    </select>
+                  </div>
+                </div>
+                <button class="btn btn-primary" onclick="saveGeneral()">Save Changes</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Appearance -->
+          <div class="settings-section" id="section-appearance">
+            <div class="section-card">
+              <div class="section-card-header">Theme & Display</div>
+              <div class="section-card-body">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">Dark Mode</div>
+                    <div class="setting-desc">Switch to a dark colour scheme across the interface</div>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode(this.checked)">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">Compact Sidebar</div>
+                    <div class="setting-desc">Show only icons in the sidebar to save screen space</div>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="compact-sidebar">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">Accent Color</div>
+                    <div class="setting-desc">Choose the primary brand colour for the interface</div>
+                  </div>
+                  <div style="display:flex;gap:.5rem;">
+                    <div class="color-swatch selected" style="background:#6366f1;" data-color="#6366f1" onclick="setAccent(this)"></div>
+                    <div class="color-swatch" style="background:#0ea5e9;" data-color="#0ea5e9" onclick="setAccent(this)"></div>
+                    <div class="color-swatch" style="background:#22c55e;" data-color="#22c55e" onclick="setAccent(this)"></div>
+                    <div class="color-swatch" style="background:#f59e0b;" data-color="#f59e0b" onclick="setAccent(this)"></div>
+                    <div class="color-swatch" style="background:#ef4444;" data-color="#ef4444" onclick="setAccent(this)"></div>
+                    <div class="color-swatch" style="background:#8b5cf6;" data-color="#8b5cf6" onclick="setAccent(this)"></div>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">Font Size</div>
+                    <div class="setting-desc">Adjust the base font size for readability</div>
+                  </div>
+                  <select class="form-select" id="font-size" style="width:120px;height:38px;" onchange="setFontSize(this.value)">
+                    <option value="14">Small (14px)</option>
+                    <option value="16" selected>Default (16px)</option>
+                    <option value="18">Large (18px)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Users -->
+          <div class="settings-section" id="section-users">
+            <div class="section-card">
+              <div class="section-card-header">User Accounts</div>
+              <div class="section-card-body">
+                <div id="users-list"></div>
+                <button class="btn btn-ghost" style="margin-top:.75rem;" onclick="openAddUser()">+ Add User</button>
+              </div>
+            </div>
+            <div class="section-card">
+              <div class="section-card-header">Role Permissions</div>
+              <div class="section-card-body">
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-label">Admin</div><div class="setting-desc">Full access to all modules including settings and user management</div></div>
+                  <span class="badge badge-success">Full Access</span>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-label">Manager</div><div class="setting-desc">Access to all operational modules; no user/settings management</div></div>
+                  <span class="badge badge-info">Operational</span>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-label">Staff</div><div class="setting-desc">Read-only access to assigned modules; limited write permissions</div></div>
+                  <span class="badge badge-warning">Limited</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notifications -->
+          <div class="settings-section" id="section-notifications">
+            <div class="section-card">
+              <div class="section-card-header">Notification Preferences</div>
+              <div class="section-card-body">
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-label">Low Stock Alerts</div><div class="setting-desc">Notify when product stock falls below reorder level</div></div>
+                  <label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-label">Overdue Delivery Alerts</div><div class="setting-desc">Notify when orders pass their estimated delivery date</div></div>
+                  <label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-label">New Purchase Orders</div><div class="setting-desc">Notify when a new PO is created</div></div>
+                  <label class="toggle-switch"><input type="checkbox"><span class="toggle-slider"></span></label>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-label">Production Completion</div><div class="setting-desc">Notify when a work order is marked as completed</div></div>
+                  <label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-label">Daily Summary Email</div><div class="setting-desc">Receive a daily digest of key business metrics</div></div>
+                  <label class="toggle-switch"><input type="checkbox"><span class="toggle-slider"></span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Inventory Settings -->
+          <div class="settings-section" id="section-inventory-settings">
+            <div class="section-card">
+              <div class="section-card-header">Inventory Defaults</div>
+              <div class="section-card-body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                  <div class="form-group">
+                    <label class="form-label">Default Reorder Level</label>
+                    <input type="number" class="form-input" id="reorder-level" value="10" min="0">
+                    <span style="font-size:.75rem;color:#888;">Applied to products without a custom level</span>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Low Stock Warning Threshold</label>
+                    <input type="number" class="form-input" id="low-stock-threshold" value="5" min="0">
+                    <span style="font-size:.75rem;color:#888;">Trigger alert below this quantity</span>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Default Tax Rate (%)</label>
+                    <input type="number" class="form-input" id="tax-rate" value="18" min="0" max="100">
+                    <span style="font-size:.75rem;color:#888;">GST rate applied to sales invoices</span>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">SKU Prefix</label>
+                    <input type="text" class="form-input" id="sku-prefix" value="SKU-" placeholder="e.g. PROD-">
+                    <span style="font-size:.75rem;color:#888;">Prefix for auto-generated SKUs</span>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-label">Auto-deduct stock on sale</div><div class="setting-desc">Automatically reduce inventory when a sale is processed at POS</div></div>
+                  <label class="toggle-switch"><input type="checkbox" id="auto-deduct" checked><span class="toggle-slider"></span></label>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-label">Allow Negative Stock</div><div class="setting-desc">Allow sales even when stock hits zero (backorder mode)</div></div>
+                  <label class="toggle-switch"><input type="checkbox" id="allow-negative"><span class="toggle-slider"></span></label>
+                </div>
+                <button class="btn btn-primary" onclick="showToast('Inventory settings saved!','success')">Save Inventory Settings</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Data & Export -->
+          <div class="settings-section" id="section-data">
+            <div class="section-card">
+              <div class="section-card-header">Data Export</div>
+              <div class="section-card-body">
+                <p style="font-size:.875rem;color:#555;margin-bottom:1.25rem;">Export your ERP data as JSON for backup or migration purposes. In production, this would connect to a real database export.</p>
+                <div style="display:flex;flex-wrap:wrap;gap:.75rem;">
+                  <button class="btn btn-ghost" onclick="exportData('products')">📦 Export Products</button>
+                  <button class="btn btn-ghost" onclick="exportData('customers')">👤 Export Customers</button>
+                  <button class="btn btn-ghost" onclick="exportData('orders')">🚚 Export Orders</button>
+                  <button class="btn btn-ghost" onclick="exportData('employees')">👥 Export Employees</button>
+                  <button class="btn btn-primary" onclick="exportData('all')">⬇️ Export All Data</button>
+                </div>
+              </div>
+            </div>
+            <div class="section-card">
+              <div class="section-card-header">Data Import</div>
+              <div class="section-card-body">
+                <p style="font-size:.875rem;color:#888;">Import functionality would be available in the production version with a backend API.</p>
+                <div class="form-group" style="margin-top:.75rem;">
+                  <label class="form-label">Upload JSON File</label>
+                  <input type="file" class="form-input" id="import-file" accept=".json" disabled>
+                </div>
+                <button class="btn btn-ghost" disabled>Import Data (Not available in prototype)</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Danger Zone -->
+          <div class="settings-section" id="section-danger">
+            <div class="section-card danger-zone">
+              <div class="section-card-header">⚠️ Danger Zone</div>
+              <div class="section-card-body">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label" style="color:#b91c1c;">Reset All MockData</div>
+                    <div class="setting-desc">Clears all in-memory data back to initial state. This cannot be undone during this session.</div>
+                  </div>
+                  <button class="btn btn-danger" onclick="confirmReset('data')">Reset Data</button>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label" style="color:#b91c1c;">Clear All Attendance Records</div>
+                    <div class="setting-desc">Removes all attendance records saved in this session.</div>
+                  </div>
+                  <button class="btn btn-danger" onclick="confirmReset('attendance')">Clear Attendance</button>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label" style="color:#b91c1c;">Logout & Clear Session</div>
+                    <div class="setting-desc">Logs out the current user and clears session storage.</div>
+                  </div>
+                  <button class="btn btn-danger" onclick="logout()">Logout</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    function showSection(id, navItem) {
+      document.querySelectorAll('.settings-section').forEach(s=>s.classList.remove('active'));
+      document.querySelectorAll('.settings-nav-item').forEach(n=>n.classList.remove('active'));
+      document.getElementById('section-'+id).classList.add('active');
+      navItem.classList.add('active');
+      if (id === 'users') renderUsers();
+    }
+
+    function saveGeneral() {
+      showToast('Company information saved!', 'success');
+    }
+
+    function toggleDarkMode(on) {
+      document.body.classList.toggle('dark', on);
+      showToast(on ? 'Dark mode enabled' : 'Dark mode disabled', 'info');
+    }
+
+    function setAccent(swatch) {
+      document.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('selected'));
+      swatch.classList.add('selected');
+      document.documentElement.style.setProperty('--primary', swatch.dataset.color);
+      showToast('Accent color updated', 'success');
+    }
+
+    function setFontSize(size) {
+      document.documentElement.style.fontSize = size + 'px';
+      showToast('Font size updated to ' + size + 'px', 'info');
+    }
+
+    function renderUsers() {
+      const users = MockData.users || [];
+      function getInitials(n){ return (n||'?').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase(); }
+      const ROLE_BADGE = {admin:'badge-success',manager:'badge-info',staff:'badge-warning'};
+      document.getElementById('users-list').innerHTML = users.map(u=>`
+        <div class="user-chip">
+          <div class="user-avatar">${getInitials(u.name)}</div>
+          <div style="flex:1;">
+            <div style="font-weight:600;font-size:.875rem;">${u.name}</div>
+            <div style="font-size:.75rem;color:#888;">${u.username}</div>
+          </div>
+          <span class="badge ${ROLE_BADGE[u.role]||''}">${u.role}</span>
+        </div>
+      `).join('') || '<p style="color:#888;font-size:.875rem;">No users found in MockData</p>';
+    }
+
+    function openAddUser() {
+      openModal('Add User', `
+        <div class="form-group"><label class="form-label">Full Name</label><input type="text" class="form-input" id="nu-name" placeholder="e.g. Ravi Kumar"></div>
+        <div class="form-group"><label class="form-label">Username</label><input type="text" class="form-input" id="nu-username" placeholder="e.g. ravi.kumar"></div>
+        <div class="form-group"><label class="form-label">Password</label><input type="password" class="form-input" id="nu-pass" placeholder="Minimum 6 characters"></div>
+        <div class="form-group"><label class="form-label">Role</label>
+          <select class="form-select" id="nu-role"><option value="staff">Staff</option><option value="manager">Manager</option><option value="admin">Admin</option></select>
+        </div>
+        <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1rem;">
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="addUser()">Add User</button>
+        </div>
+      `);
+    }
+
+    function addUser() {
+      const name = document.getElementById('nu-name').value.trim();
+      const username = document.getElementById('nu-username').value.trim();
+      const pass = document.getElementById('nu-pass').value;
+      const role = document.getElementById('nu-role').value;
+      if (!name||!username||!pass) { showToast('Fill all fields','warning'); return; }
+      if (!MockData.users) MockData.users = [];
+      MockData.users.push({ id: MockData.users.length+1, name, username, password: pass, role });
+      showToast(name+' added successfully!','success');
+      closeModal();
+      renderUsers();
+    }
+
+    function exportData(type) {
+      let data;
+      if (type === 'all') {
+        data = { products: MockData.products, customers: MockData.customers, orders: MockData.orders, employees: MockData.employees };
+      } else {
+        data = MockData[type] || [];
+      }
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'erp-'+type+'-export.json';
+      a.click(); URL.revokeObjectURL(url);
+      showToast('Exported ' + type + ' data', 'success');
+    }
+
+    function confirmReset(type) {
+      const labels = { data: 'all mock data', attendance: 'all attendance records' };
+      openModal('⚠️ Confirm Reset', `
+        <p>Are you sure you want to clear <strong>${labels[type]||type}</strong>? This action cannot be undone in this session.</p>
+        <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1rem;">
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-danger" onclick="doReset('${type}')">Yes, Reset</button>
+        </div>
+      `);
+    }
+
+    function doReset(type) {
+      if (type === 'attendance') {
+        MockData.attendance = {};
+        showToast('Attendance records cleared','success');
+      } else if (type === 'data') {
+        showToast('MockData reset (reload page for full effect)','info');
+      }
+      closeModal();
+    }
+
+    function logout() {
+      sessionStorage.clear();
+      localStorage.removeItem('erp_user');
+      window.location.href = '/index.html';
+    }
+  </script>
+</body>
+</html>

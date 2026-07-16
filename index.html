@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Factory ERP — Loading...</title>
+  <style>
+    /* Minimal inline style so this page looks intentional during the redirect */
+    body {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8fafc;
+      color: #64748b;
+      font-size: 14px;
+    }
+    .loader {
+      text-align: center;
+    }
+    .loader-icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="loader">
+    <div class="loader-icon">🏭</div>
+    <div>Loading Factory ERP...</div>
+  </div>
+
+  <!-- Only auth.js needed here — no other scripts required -->
+  <script src="assets/js/auth.js"></script>
+  <script>
+    // Entry point — check session and redirect accordingly.
+    // No visible UI needed. Redirects happen instantly.
+    (function () {
+      const user = getCurrentUser();
+      if (user) {
+        window.location.href = '/pages/dashboard.html';
+      } else {
+        window.location.href = '/pages/login.html';
+      }
+    })();
+  </script>
+</body>
+</html>
+

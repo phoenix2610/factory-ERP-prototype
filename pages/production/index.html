@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Work Orders — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <h1 class="page-title">🏭 Work Orders</h1>
+          <p style="color:var(--text-muted);margin-top:0.25rem;">Manage and track all production orders</p>
+        </div>
+        <div style="display:flex;gap:0.75rem;">
+          <a href="/pages/production/kanban.html" class="btn btn-ghost">🗂️ Kanban View</a>
+          <button class="btn btn-primary" onclick="openNewWOModal()">+ New Work Order</button>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="card" style="margin-bottom:1.25rem;">
+        <div class="card-body" style="display:flex;gap:1rem;flex-wrap:wrap;">
+          <input type="text" class="form-input" id="search-input" placeholder="🔍 Search WO number or product..." style="flex:1;min-width:200px;">
+          <select class="form-select" id="filter-status" style="min-width:160px;">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="raw">Raw Material</option>
+            <option value="cutting">Cutting</option>
+            <option value="assembly">Assembly</option>
+            <option value="qc">QC Check</option>
+            <option value="packed">Packed</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="card">
+        <div class="card-body" style="padding:0;">
+          <table class="table-base" style="width:100%;">
+            <thead>
+              <tr>
+                <th>WO Number</th>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Status</th>
+                <th>Department</th>
+                <th>Start Date</th>
+                <th>Due Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="wo-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    const STATUS_BADGES = {
+      pending:   '<span class="badge badge-warning">Pending</span>',
+      raw:       '<span class="badge badge-warning">Raw Material</span>',
+      cutting:   '<span class="badge badge-danger">Cutting</span>',
+      assembly:  '<span class="badge badge-info">Assembly</span>',
+      qc:        '<span class="badge badge-info">QC Check</span>',
+      packed:    '<span class="badge badge-info">Packed</span>',
+      completed: '<span class="badge badge-success">Completed</span>',
+    };
+
+    const today = new Date();
+
+    function isOverdue(wo) {
+      return wo.dueDate && new Date(wo.dueDate) < today && wo.status !== 'completed';
+    }
+
+    function renderTable() {
+      const query = document.getElementById('search-input').value.toLowerCase();
+      const statusFilter = document.getElementById('filter-status').value;
+
+      const filtered = MockData.workOrders.filter(wo => {
+        const matchSearch = !query || wo.woNumber.toLowerCase().includes(query) ||
+          (wo.productName || '').toLowerCase().includes(query);
+        const matchStatus = !statusFilter || wo.status === statusFilter;
+        return matchSearch && matchStatus;
+      });
+
+      const tbody = document.getElementById('wo-tbody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">No work orders found.</td></tr>\`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(wo => \`
+        <tr style="\${isOverdue(wo) ? 'background:rgba(239,68,68,0.05);' : ''}">
+          <td><strong>\${wo.woNumber}</strong>\${isOverdue(wo) ? ' <span style="color:var(--danger);font-size:0.75rem;">⚠️ Overdue</span>' : ''}</td>
+          <td>\${wo.productName || 'N/A'}</td>
+          <td>\${wo.quantity}</td>
+          <td>\${STATUS_BADGES[wo.status] || wo.status}</td>
+          <td>\${wo.assignedDept || 'N/A'}</td>
+          <td>\${formatDate(wo.startDate)}</td>
+          <td style="\${isOverdue(wo) ? 'color:var(--danger);font-weight:600;' : ''}">\${formatDate(wo.dueDate)}</td>
+          <td>
+            <div style="display:flex;gap:0.5rem;">
+              <button class="btn btn-ghost btn-sm" onclick="viewWO(\${wo.id})">👁️ View</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteWO(\${wo.id}, '\${wo.woNumber}')">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      \`).join('');
+    }
+
+    function viewWO(id) {
+      const wo = MockData.workOrders.find(w => w.id === id);
+      if (!wo) return;
+      openModal(\`\${wo.woNumber} Details\`, \`
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div><p style="color:var(--text-muted);font-size:0.8rem;">Product</p><p style="font-weight:500;">\${wo.productName}</p></div>
+          <div><p style="color:var(--text-muted);font-size:0.8rem;">Quantity</p><p style="font-weight:600;">\${wo.quantity} units</p></div>
+          <div><p style="color:var(--text-muted);font-size:0.8rem;">Status</p>\${STATUS_BADGES[wo.status] || wo.status}</div>
+          <div><p style="color:var(--text-muted);font-size:0.8rem;">Department</p><p>\${wo.assignedDept}</p></div>
+          <div><p style="color:var(--text-muted);font-size:0.8rem;">Start Date</p><p>\${formatDate(wo.startDate)}</p></div>
+          <div><p style="color:var(--text-muted);font-size:0.8rem;">Due Date</p><p style="\${isOverdue(wo) ? 'color:var(--danger);' : ''}">\${formatDate(wo.dueDate)}</p></div>
+        </div>
+        \${wo.notes ? \`<div style="margin-top:1rem;padding:0.75rem;background:var(--bg-subtle,#f8fafc);border-radius:8px;"><p style="color:var(--text-muted);font-size:0.8rem;">Notes</p><p>\${wo.notes}</p></div>\` : ''}
+        <div style="margin-top:1.5rem;"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>
+      \`);
+    }
+
+    function deleteWO(id, woNum) {
+      openModal('Delete Work Order', \`
+        <p>Delete <strong>\${woNum}</strong>? This cannot be undone.</p>
+        <div style="display:flex;gap:0.75rem;margin-top:1.25rem;">
+          <button class="btn btn-danger" onclick="confirmDeleteWO(\${id})">Delete</button>
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        </div>
+      \`);
+    }
+
+    function confirmDeleteWO(id) {
+      const idx = MockData.workOrders.findIndex(w => w.id === id);
+      if (idx !== -1) MockData.workOrders.splice(idx, 1);
+      closeModal();
+      showToast('Work order deleted', 'success');
+      renderTable();
+    }
+
+    function openNewWOModal() {
+      const productOptions = MockData.products.map(p =>
+        \`<option value="\${p.id}" data-name="\${p.name}">\${p.name}</option>\`).join('');
+      const depts = ['Production', 'QC', 'Dispatch', 'Inventory'];
+      const deptOptions = depts.map(d => \`<option value="\${d}">\${d}</option>\`).join('');
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      openModal('New Work Order', \`
+        <div class="form-group">
+          <label class="form-label">Product *</label>
+          <select class="form-select" id="nwo-product">\${productOptions}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantity *</label>
+          <input type="number" class="form-input" id="nwo-qty" min="1" placeholder="e.g. 100">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Department *</label>
+          <select class="form-select" id="nwo-dept">\${deptOptions}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Due Date *</label>
+          <input type="date" class="form-input" id="nwo-due" value="\${todayStr}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-textarea" id="nwo-notes" rows="2" placeholder="Optional..."></textarea>
+        </div>
+        <div style="display:flex;gap:0.75rem;margin-top:1rem;">
+          <button class="btn btn-primary" onclick="createWO()">Create</button>
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        </div>
+      \`);
+    }
+
+    function createWO() {
+      const productSel = document.getElementById('nwo-product');
+      const qty = document.getElementById('nwo-qty').value;
+      const dept = document.getElementById('nwo-dept').value;
+      const due = document.getElementById('nwo-due').value;
+      if (!qty || !due) { showToast('Fill all required fields', 'warning'); return; }
+
+      const productName = productSel.options[productSel.selectedIndex].dataset.name;
+      const newId = Math.max(...MockData.workOrders.map(w => w.id), 0) + 1;
+      MockData.workOrders.push({
+        id: newId,
+        woNumber: \`WO-\${String(newId).padStart(4, '0')}\`,
+        productId: parseInt(productSel.value),
+        productName,
+        quantity: parseInt(qty),
+        assignedDept: dept,
+        startDate: new Date().toISOString().split('T')[0],
+        dueDate: due,
+        status: 'pending',
+        notes: document.getElementById('nwo-notes').value,
+      });
+
+      closeModal();
+      showToast('Work order created!', 'success');
+      renderTable();
+    }
+
+    const debouncedRender = debounce(renderTable, 300);
+    document.getElementById('search-input').addEventListener('input', debouncedRender);
+    document.getElementById('filter-status').addEventListener('change', renderTable);
+
+    renderTable();
+  </script>
+</body>
+</html>

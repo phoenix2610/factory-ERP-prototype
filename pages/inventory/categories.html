@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Categories — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <h1 class="page-title">🏷️ Categories</h1>
+          <p style="color:var(--text-muted);margin-top:0.25rem;">Manage product categories and subcategories</p>
+        </div>
+        <a href="/pages/inventory/index.html" class="btn btn-ghost">← Back to Inventory</a>
+      </div>
+
+      <div class="grid-2" style="gap:1.5rem;align-items:start;">
+
+        <!-- Left: Category List -->
+        <div class="card">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <strong>Categories</strong>
+            <span id="cat-count" style="color:var(--text-muted);font-size:0.85rem;"></span>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <ul id="category-list" style="list-style:none;margin:0;padding:0;"></ul>
+          </div>
+          <div style="padding:1rem;border-top:1px solid var(--border);">
+            <div style="display:flex;gap:0.5rem;">
+              <input type="text" class="form-input" id="new-cat-input" placeholder="New category name...">
+              <button class="btn btn-primary btn-sm" onclick="addCategory()">+ Add</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Subcategory List -->
+        <div class="card">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <strong id="subcat-title">Subcategories</strong>
+            <span id="subcat-count" style="color:var(--text-muted);font-size:0.85rem;"></span>
+          </div>
+          <div class="card-body" style="padding:0;" id="subcat-body">
+            <div style="text-align:center;padding:3rem;color:var(--text-muted);">
+              <div style="font-size:2rem;margin-bottom:0.5rem;">👈</div>
+              <p>Select a category to manage subcategories</p>
+            </div>
+          </div>
+          <div style="padding:1rem;border-top:1px solid var(--border);" id="subcat-add-row" style="display:none;">
+            <div style="display:flex;gap:0.5rem;" id="subcat-add-form">
+              <input type="text" class="form-input" id="new-subcat-input" placeholder="New subcategory name...">
+              <button class="btn btn-primary btn-sm" onclick="addSubcategory()">+ Add</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    let selectedCatIndex = null;
+
+    function getProductCountForCat(catName) {
+      return MockData.products.filter(p => p.category === catName).length;
+    }
+
+    function renderCategories() {
+      const list = document.getElementById('category-list');
+      document.getElementById('cat-count').textContent = \`\${MockData.categories.length} categories\`;
+
+      list.innerHTML = MockData.categories.map((cat, idx) => \`
+        <li style="
+          display:flex;justify-content:space-between;align-items:center;
+          padding:0.875rem 1.25rem;cursor:pointer;
+          background:\${selectedCatIndex === idx ? 'var(--primary-light, #eff6ff)' : ''};
+          border-left:\${selectedCatIndex === idx ? '3px solid var(--primary)' : '3px solid transparent'};
+          border-bottom:1px solid var(--border);
+          transition:background 0.15s;
+        " onclick="selectCategory(\${idx})" onmouseover="this.style.background='var(--bg-hover,#f9fafb)'" onmouseout="this.style.background='\${selectedCatIndex === idx ? 'var(--primary-light, #eff6ff)' : ''}'">
+          <div>
+            <div style="font-weight:500;">📁 \${cat.name}</div>
+            <div style="font-size:0.78rem;color:var(--text-muted);">
+              \${(cat.subcategories || []).length} subcategories · \${getProductCountForCat(cat.name)} products
+            </div>
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteCategory(\${idx})">🗑️</button>
+        </li>
+      \`).join('');
+    }
+
+    function selectCategory(idx) {
+      selectedCatIndex = idx;
+      renderCategories();
+      renderSubcategories();
+      document.getElementById('subcat-add-row').style.display = 'block';
+    }
+
+    function renderSubcategories() {
+      const cat = MockData.categories[selectedCatIndex];
+      const body = document.getElementById('subcat-body');
+      document.getElementById('subcat-title').textContent = \`Subcategories — \${cat.name}\`;
+      document.getElementById('subcat-count').textContent = \`\${(cat.subcategories || []).length} items\`;
+
+      if (!cat.subcategories || cat.subcategories.length === 0) {
+        body.innerHTML = \`<div style="text-align:center;padding:2rem;color:var(--text-muted);">No subcategories yet. Add one below.</div>\`;
+        return;
+      }
+
+      body.innerHTML = \`<ul style="list-style:none;margin:0;padding:0;">\` +
+        cat.subcategories.map((sub, subIdx) => \`
+          <li style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem 1.25rem;border-bottom:1px solid var(--border);">
+            <span>📂 \${sub}</span>
+            <button class="btn btn-danger btn-sm" onclick="deleteSubcategory(\${subIdx})">🗑️</button>
+          </li>
+        \`).join('') + \`</ul>\`;
+    }
+
+    function addCategory() {
+      const input = document.getElementById('new-cat-input');
+      const name = input.value.trim();
+      if (!name) { showToast('Enter a category name', 'warning'); return; }
+      if (MockData.categories.find(c => c.name.toLowerCase() === name.toLowerCase())) {
+        showToast('Category already exists', 'warning'); return;
+      }
+      MockData.categories.push({ name, subcategories: [] });
+      input.value = '';
+      showToast(\`Category "\${name}" added\`, 'success');
+      renderCategories();
+    }
+
+    function deleteCategory(idx) {
+      const cat = MockData.categories[idx];
+      const count = getProductCountForCat(cat.name);
+      if (count > 0) {
+        openModal('Cannot Delete Category', \`
+          <p>The category <strong>\${cat.name}</strong> has <strong>\${count} product(s)</strong> assigned to it.</p>
+          <p style="color:var(--text-muted);">Reassign or delete those products before removing this category.</p>
+          <button class="btn btn-ghost" onclick="closeModal()">OK</button>
+        \`);
+        return;
+      }
+      MockData.categories.splice(idx, 1);
+      if (selectedCatIndex === idx) selectedCatIndex = null;
+      renderCategories();
+      if (selectedCatIndex === null) {
+        document.getElementById('subcat-body').innerHTML = \`<div style="text-align:center;padding:3rem;color:var(--text-muted);"><div style="font-size:2rem;">👈</div><p>Select a category to manage subcategories</p></div>\`;
+        document.getElementById('subcat-title').textContent = 'Subcategories';
+        document.getElementById('subcat-count').textContent = '';
+      }
+      showToast(\`Category "\${cat.name}" deleted\`, 'success');
+    }
+
+    function addSubcategory() {
+      if (selectedCatIndex === null) { showToast('Select a category first', 'warning'); return; }
+      const input = document.getElementById('new-subcat-input');
+      const name = input.value.trim();
+      if (!name) { showToast('Enter a subcategory name', 'warning'); return; }
+      const cat = MockData.categories[selectedCatIndex];
+      if (!cat.subcategories) cat.subcategories = [];
+      if (cat.subcategories.includes(name)) { showToast('Subcategory already exists', 'warning'); return; }
+      cat.subcategories.push(name);
+      input.value = '';
+      showToast(\`Subcategory "\${name}" added\`, 'success');
+      renderSubcategories();
+      renderCategories();
+    }
+
+    function deleteSubcategory(subIdx) {
+      const cat = MockData.categories[selectedCatIndex];
+      const name = cat.subcategories[subIdx];
+      cat.subcategories.splice(subIdx, 1);
+      showToast(\`"\${name}" removed\`, 'success');
+      renderSubcategories();
+      renderCategories();
+    }
+
+    // Init
+    renderCategories();
+  </script>
+</body>
+</html>

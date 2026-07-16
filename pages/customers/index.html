@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customers — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <h1 class="page-title">👥 Customers</h1>
+          <p style="color:var(--text-muted);margin-top:0.25rem;">Manage customer profiles and udhaar balances</p>
+        </div>
+        <button class="btn btn-primary" onclick="openAddCustomerModal()">+ Add Customer</button>
+      </div>
+
+      <!-- Search -->
+      <div class="card" style="margin-bottom:1.25rem;">
+        <div class="card-body" style="display:flex;gap:1rem;flex-wrap:wrap;">
+          <input type="text" class="form-input" id="search-input" placeholder="🔍 Search by name or phone..." style="flex:1;min-width:200px;">
+          <select class="form-select" id="filter-udhaar" style="min-width:160px;">
+            <option value="">All Customers</option>
+            <option value="udhaar">Has Outstanding Udhaar</option>
+            <option value="clear">Clear Balance</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="grid-3" style="margin-bottom:1.25rem;">
+        <div class="card">
+          <div class="card-body" style="text-align:center;">
+            <div style="font-size:1.5rem;font-weight:700;color:var(--primary);" id="kpi-total">—</div>
+            <div style="color:var(--text-muted);font-size:0.85rem;">Total Customers</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="text-align:center;">
+            <div style="font-size:1.5rem;font-weight:700;color:var(--danger);" id="kpi-udhaar">—</div>
+            <div style="color:var(--text-muted);font-size:0.85rem;">Total Udhaar</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="text-align:center;">
+            <div style="font-size:1.5rem;font-weight:700;color:var(--warning);" id="kpi-udhaar-count">—</div>
+            <div style="color:var(--text-muted);font-size:0.85rem;">Customers with Udhaar</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Customer Table -->
+      <div class="card">
+        <div class="card-body" style="padding:0;">
+          <table class="table-base" style="width:100%;">
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Phone</th>
+                <th>Total Purchases</th>
+                <th>Outstanding Udhaar</th>
+                <th>Last Purchase</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="customer-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    function getCustomerStats(customer) {
+      const invoices = (MockData.invoices || []).filter(i => i.customerId == customer.id);
+      const totalPurchases = invoices.reduce((sum, i) => sum + (i.total || 0), 0);
+      const lastInvoice = invoices.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      return { totalPurchases, lastPurchase: lastInvoice ? lastInvoice.date : null };
+    }
+
+    function applyFilters() {
+      const query = document.getElementById('search-input').value.toLowerCase();
+      const udhaarFilter = document.getElementById('filter-udhaar').value;
+
+      const filtered = (MockData.customers || []).filter(c => {
+        const matchSearch = !query ||
+          c.name.toLowerCase().includes(query) ||
+          (c.phone || '').includes(query);
+        const udhaarBal = c.udhaarBalance || 0;
+        const matchUdhaar = !udhaarFilter ||
+          (udhaarFilter === 'udhaar' && udhaarBal > 0) ||
+          (udhaarFilter === 'clear' && udhaarBal === 0);
+        return matchSearch && matchUdhaar;
+      });
+
+      // KPIs
+      const totalUdhaar = (MockData.customers || []).reduce((sum, c) => sum + (c.udhaarBalance || 0), 0);
+      const udhaarCount = (MockData.customers || []).filter(c => (c.udhaarBalance || 0) > 0).length;
+      document.getElementById('kpi-total').textContent = filtered.length;
+      document.getElementById('kpi-udhaar').textContent = formatCurrency(totalUdhaar);
+      document.getElementById('kpi-udhaar-count').textContent = udhaarCount;
+
+      const tbody = document.getElementById('customer-tbody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No customers found.</td></tr>\`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(c => {
+        const stats = getCustomerStats(c);
+        const udhaar = c.udhaarBalance || 0;
+        return \`
+          <tr class="table-row-clickable" onclick="window.location='/pages/customers/profile.html?id=\${c.id}'">
+            <td style="font-weight:600;">\${c.name}</td>
+            <td>\${c.phone || '—'}</td>
+            <td>\${formatCurrency(stats.totalPurchases)}</td>
+            <td style="font-weight:600;\${udhaar > 0 ? 'color:var(--danger);' : 'color:var(--success);'}">
+              \${udhaar > 0 ? \`⚠️ \${formatCurrency(udhaar)}\` : '✅ Clear'}
+            </td>
+            <td>\${stats.lastPurchase ? formatDate(stats.lastPurchase) : '—'}</td>
+            <td onclick="event.stopPropagation()">
+              <div style="display:flex;gap:0.5rem;">
+                <a href="/pages/customers/profile.html?id=\${c.id}" class="btn btn-ghost btn-sm">👤 Profile</a>
+                <button class="btn btn-danger btn-sm" onclick="deleteCustomer(\${c.id},'\${c.name}')">🗑️</button>
+              </div>
+            </td>
+          </tr>\`;
+      }).join('');
+    }
+
+    function openAddCustomerModal() {
+      openModal('Add New Customer', \`
+        <div class="form-group">
+          <label class="form-label">Full Name *</label>
+          <input type="text" class="form-input" id="nc-name" placeholder="e.g. Suresh Patel">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone *</label>
+          <input type="tel" class="form-input" id="nc-phone" placeholder="9876543210">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Address</label>
+          <textarea class="form-textarea" id="nc-address" rows="2" placeholder="Full address..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Credit Limit (₹)</label>
+          <input type="number" class="form-input" id="nc-credit" min="0" placeholder="e.g. 50000">
+        </div>
+        <div style="display:flex;gap:0.75rem;margin-top:1rem;">
+          <button class="btn btn-primary" onclick="addCustomer()">Add Customer</button>
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        </div>
+      \`);
+    }
+
+    function addCustomer() {
+      const name = document.getElementById('nc-name').value.trim();
+      const phone = document.getElementById('nc-phone').value.trim();
+      if (!name || !phone) { showToast('Name and phone are required', 'warning'); return; }
+
+      const newId = Math.max(...(MockData.customers || []).map(c => c.id), 0) + 1;
+      if (!MockData.customers) MockData.customers = [];
+      MockData.customers.push({
+        id: newId,
+        name,
+        phone,
+        address: document.getElementById('nc-address').value.trim(),
+        creditLimit: parseFloat(document.getElementById('nc-credit').value) || 0,
+        udhaarBalance: 0,
+        joinDate: new Date().toISOString().split('T')[0],
+      });
+
+      closeModal();
+      showToast(\`Customer "\${name}" added!\`, 'success');
+      applyFilters();
+    }
+
+    function deleteCustomer(id, name) {
+      openModal('Delete Customer', \`
+        <p>Delete customer <strong>\${name}</strong>? All associated data will be lost.</p>
+        <div style="display:flex;gap:0.75rem;margin-top:1.25rem;">
+          <button class="btn btn-danger" onclick="confirmDeleteCustomer(\${id})">Delete</button>
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        </div>
+      \`);
+    }
+
+    function confirmDeleteCustomer(id) {
+      const idx = (MockData.customers || []).findIndex(c => c.id === id);
+      if (idx !== -1) MockData.customers.splice(idx, 1);
+      closeModal();
+      showToast('Customer deleted', 'success');
+      applyFilters();
+    }
+
+    const debouncedFilter = debounce(applyFilters, 300);
+    document.getElementById('search-input').addEventListener('input', debouncedFilter);
+    document.getElementById('filter-udhaar').addEventListener('change', applyFilters);
+
+    applyFilters();
+  </script>
+</body>
+</html>

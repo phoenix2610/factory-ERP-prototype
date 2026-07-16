@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orders & Delivery — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <style>
+    .pipeline-track {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 2rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+    .pipeline-step {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .pipeline-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      transition: background 0.2s;
+    }
+    .pipeline-node:hover { background: var(--bg); }
+    .pipeline-node.active .node-dot { background: var(--primary); border-color: var(--primary); }
+    .pipeline-node.active .node-label { color: var(--primary); font-weight: 600; }
+    .node-dot {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+    .node-label { font-size: 0.72rem; color: var(--text-muted, #888); white-space: nowrap; }
+    .node-count {
+      font-size: 0.68rem;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 10px;
+      padding: 1px 6px;
+      min-width: 18px;
+      text-align: center;
+    }
+    .pipeline-connector {
+      flex: 1;
+      min-width: 24px;
+      height: 2px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+    .status-pipeline-cell {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .overdue-row { background: #fff5f5 !important; }
+    .overdue-row:hover { background: #ffe8e8 !important; }
+    .filter-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 1.25rem;
+    }
+    .filter-row .form-input,
+    .filter-row .form-select { height: 38px; padding: 0 0.75rem; font-size: 0.875rem; }
+    .search-wrap { flex: 1; min-width: 200px; }
+    .progress-dots {
+      display: flex;
+      gap: 3px;
+    }
+    .progress-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+    .progress-dot.done { background: var(--success, #22c55e); }
+    .progress-dot.current { background: var(--primary); }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .detail-label { font-size: 0.75rem; color: #888; margin-bottom: 2px; }
+    .detail-value { font-weight: 600; font-size: 0.9rem; }
+    .items-table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
+    .items-table th, .items-table td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+    .items-table th { background: var(--bg); font-weight: 600; }
+    .status-update-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <!-- Page Header -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+        <div>
+          <h1 style="font-size:1.5rem; font-weight:700; margin:0;">Orders & Delivery</h1>
+          <p style="color:#888; font-size:0.875rem; margin:4px 0 0;">Track and manage all delivery orders</p>
+        </div>
+        <button class="btn btn-primary" onclick="openNewOrderModal()">+ New Order</button>
+      </div>
+
+      <!-- Status Pipeline -->
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-body" style="padding:1rem 1.25rem;">
+          <p style="font-size:0.75rem; text-transform:uppercase; letter-spacing:.05em; color:#888; margin:0 0 0.75rem; font-weight:600;">Order Pipeline</p>
+          <div class="pipeline-track" id="pipeline-track">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-row">
+        <div class="search-wrap">
+          <input type="text" class="form-input" id="search-input" placeholder="🔍  Search by order ID or customer..." oninput="handleSearch(this.value)">
+        </div>
+        <select class="form-select" id="status-filter" onchange="applyFilters()" style="min-width:160px;">
+          <option value="">All Statuses</option>
+          <option value="Placed">Placed</option>
+          <option value="Packed">Packed</option>
+          <option value="Dispatched">Dispatched</option>
+          <option value="Out for Delivery">Out for Delivery</option>
+          <option value="Delivered">Delivered</option>
+        </select>
+        <select class="form-select" id="overdue-filter" onchange="applyFilters()" style="min-width:140px;">
+          <option value="">All Orders</option>
+          <option value="overdue">Overdue Only</option>
+          <option value="ontime">On Time Only</option>
+        </select>
+      </div>
+
+      <!-- Orders Table -->
+      <div class="card">
+        <div class="card-body" style="padding:0; overflow-x:auto;">
+          <table class="table-base" id="orders-table">
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Assigned To</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Est. Delivery</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="orders-tbody">
+              <tr><td colspan="8" style="text-align:center; padding:2rem; color:#888;">Loading orders...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-body" style="padding:0.75rem 1.25rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:0.875rem; color:#888;" id="result-count"></span>
+          <div style="display:flex; gap:0.5rem;" id="pagination-controls"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    const STATUSES = ['Placed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'];
+    const STATUS_ICONS = { 'Placed': '📋', 'Packed': '📦', 'Dispatched': '🚚', 'Out for Delivery': '🛵', 'Delivered': '✅' };
+    const STATUS_BADGE = {
+      'Placed': 'badge badge-info',
+      'Packed': 'badge badge-warning',
+      'Dispatched': 'badge badge-warning',
+      'Out for Delivery': 'badge badge-warning',
+      'Delivered': 'badge badge-success'
+    };
+
+    let allOrders = [];
+    let filteredOrders = [];
+    let currentPage = 1;
+    const PAGE_SIZE = 10;
+    let activeStatusFilter = '';
+    const debouncedSearch = debounce((val) => { applyFilters(); }, 300);
+
+    function handleSearch(val) { debouncedSearch(val); }
+
+    function isOverdue(order) {
+      if (order.status === 'Delivered') return false;
+      const today = new Date();
+      const due = new Date(order.estDelivery);
+      return due < today;
+    }
+
+    function getProgressIndex(status) {
+      return STATUSES.indexOf(status);
+    }
+
+    function renderPipeline(orders) {
+      const counts = {};
+      STATUSES.forEach(s => counts[s] = 0);
+      orders.forEach(o => { if (counts[o.status] !== undefined) counts[o.status]++; });
+
+      const track = document.getElementById('pipeline-track');
+      track.innerHTML = STATUSES.map((s, i) => \`
+        <div class="pipeline-step">
+          <div class="pipeline-node \${activeStatusFilter === s ? 'active' : ''}" onclick="filterByStatus('\${s}')">
+            <div class="node-dot">\${STATUS_ICONS[s]}</div>
+            <div class="node-label">\${s}</div>
+            \${counts[s] > 0 ? \`<div class="node-count">\${counts[s]}</div>\` : '<div style="height:18px"></div>'}
+          </div>
+          \${i < STATUSES.length - 1 ? '<div class="pipeline-connector"></div>' : ''}
+        </div>
+      \`).join('');
+    }
+
+    function filterByStatus(status) {
+      if (activeStatusFilter === status) {
+        activeStatusFilter = '';
+        document.getElementById('status-filter').value = '';
+      } else {
+        activeStatusFilter = status;
+        document.getElementById('status-filter').value = status;
+      }
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const statusVal = document.getElementById('status-filter').value;
+      const overdueVal = document.getElementById('overdue-filter').value;
+      activeStatusFilter = statusVal;
+
+      filteredOrders = allOrders.filter(o => {
+        const matchSearch = !search ||
+          o.orderId.toLowerCase().includes(search) ||
+          o.customerName.toLowerCase().includes(search);
+        const matchStatus = !statusVal || o.status === statusVal;
+        const matchOverdue = !overdueVal ||
+          (overdueVal === 'overdue' && isOverdue(o)) ||
+          (overdueVal === 'ontime' && !isOverdue(o));
+        return matchSearch && matchStatus && matchOverdue;
+      });
+
+      currentPage = 1;
+      renderPipeline(allOrders);
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('orders-tbody');
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const pageOrders = filteredOrders.slice(start, start + PAGE_SIZE);
+      const user = getCurrentUser();
+
+      document.getElementById('result-count').textContent =
+        \`Showing \${Math.min(start + 1, filteredOrders.length)}–\${Math.min(start + PAGE_SIZE, filteredOrders.length)} of \${filteredOrders.length} orders\`;
+
+      if (pageOrders.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="8" style="text-align:center; padding:2rem; color:#888;">No orders found</td></tr>\`;
+        renderPagination();
+        return;
+      }
+
+      tbody.innerHTML = pageOrders.map(order => {
+        const overdue = isOverdue(order);
+        const progIdx = getProgressIndex(order.status);
+        const progressDots = STATUSES.map((s, i) =>
+          \`<div class="progress-dot \${i < progIdx ? 'done' : (i === progIdx ? 'current' : '')}"></div>\`
+        ).join('');
+
+        return \`
+          <tr class="\${overdue ? 'overdue-row' : ''} table-row-clickable" onclick="viewOrderDetail(\${order.id})">
+            <td><strong>\${order.orderId}</strong>\${overdue ? ' <span style="color:#ef4444; font-size:0.7rem;">⚠ Overdue</span>' : ''}</td>
+            <td>
+              <div style="font-weight:500;">\${order.customerName}</div>
+              <div style="font-size:0.75rem; color:#888;">\${order.phone || ''}</div>
+            </td>
+            <td>\${order.items ? order.items.length : 0} item\${order.items && order.items.length !== 1 ? 's' : ''}</td>
+            <td>\${order.assignedTo || '—'}</td>
+            <td><span class="\${STATUS_BADGE[order.status] || 'badge'}">\${order.status}</span></td>
+            <td>
+              <div class="progress-dots">\${progressDots}</div>
+              <div style="font-size:0.7rem; color:#888; margin-top:2px;">\${progIdx + 1}/\${STATUSES.length}</div>
+            </td>
+            <td style="color:\${overdue ? '#ef4444' : 'inherit'}; font-weight:\${overdue ? '600' : '400'};">
+              \${formatDate(order.estDelivery)}
+            </td>
+            <td onclick="event.stopPropagation()">
+              <button class="btn btn-sm btn-ghost" onclick="viewOrderDetail(\${order.id})" title="View Detail">👁</button>
+              \${user.role !== 'staff' ? \`<button class="btn btn-sm btn-primary" onclick="openUpdateStatus(\${order.id})" title="Update Status">↑ Status</button>\` : ''}
+            </td>
+          </tr>
+        \`;
+      }).join('');
+
+      renderPagination();
+    }
+
+    function renderPagination() {
+      const totalPages = Math.ceil(filteredOrders.length / PAGE_SIZE);
+      const ctrl = document.getElementById('pagination-controls');
+      if (totalPages <= 1) { ctrl.innerHTML = ''; return; }
+
+      let html = \`<button class="btn btn-sm btn-ghost" onclick="goPage(\${currentPage - 1})" \${currentPage === 1 ? 'disabled' : ''}>← Prev</button>\`;
+      for (let i = 1; i <= totalPages; i++) {
+        html += \`<button class="btn btn-sm \${i === currentPage ? 'btn-primary' : 'btn-ghost'}" onclick="goPage(\${i})">\${i}</button>\`;
+      }
+      html += \`<button class="btn btn-sm btn-ghost" onclick="goPage(\${currentPage + 1})" \${currentPage === totalPages ? 'disabled' : ''}>Next →</button>\`;
+      ctrl.innerHTML = html;
+    }
+
+    function goPage(p) {
+      const totalPages = Math.ceil(filteredOrders.length / PAGE_SIZE);
+      if (p < 1 || p > totalPages) return;
+      currentPage = p;
+      renderTable();
+    }
+
+    function viewOrderDetail(orderId) {
+      const order = MockData.orders.find(o => o.id === orderId);
+      if (!order) return;
+      const user = getCurrentUser();
+      const overdue = isOverdue(order);
+      const progIdx = getProgressIndex(order.status);
+
+      const itemsRows = order.items ? order.items.map(item => \`
+        <tr>
+          <td>\${item.productName || item.name}</td>
+          <td>\${item.qty}</td>
+          <td>\${formatCurrency(item.price || 0)}</td>
+          <td>\${formatCurrency((item.price || 0) * item.qty)}</td>
+        </tr>
+      \`).join('') : '<tr><td colspan="4" style="text-align:center; color:#888;">No items</td></tr>';
+
+      const stepsHtml = STATUSES.map((s, i) => \`
+        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+          <div style="width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.8rem;
+            background:\${i < progIdx ? '#dcfce7' : (i === progIdx ? 'var(--primary)' : 'var(--bg)')};
+            color:\${i === progIdx ? '#fff' : (i < progIdx ? '#16a34a' : '#aaa')};
+            border: 1px solid \${i <= progIdx ? (i < progIdx ? '#86efac' : 'var(--primary)') : 'var(--border)'};">
+            \${i < progIdx ? '✓' : STATUS_ICONS[s]}
+          </div>
+          <div style="font-size:0.875rem; font-weight:\${i === progIdx ? '600' : '400'}; color:\${i > progIdx ? '#aaa' : 'inherit'};\${s}</div>
+          \${i === progIdx ? '<span class="badge badge-info" style="font-size:0.65rem;">Current</span>' : ''}
+        </div>
+      \`).join('');
+
+      const modalHtml = \`
+        <div class="detail-grid">
+          <div><div class="detail-label">Order ID</div><div class="detail-value">\${order.orderId}</div></div>
+          <div><div class="detail-label">Current Status</div><div class="detail-value"><span class="\${STATUS_BADGE[order.status] || 'badge'}">\${order.status}</span>\${overdue ? ' <span style="color:#ef4444; font-size:0.75rem;">⚠ Overdue</span>' : ''}</div></div>
+          <div><div class="detail-label">Customer</div><div class="detail-value">\${order.customerName}</div></div>
+          <div><div class="detail-label">Phone</div><div class="detail-value">\${order.phone || '—'}</div></div>
+          <div><div class="detail-label">Order Date</div><div class="detail-value">\${formatDate(order.orderDate)}</div></div>
+          <div><div class="detail-label">Est. Delivery</div><div class="detail-value" style="color:\${overdue ? '#ef4444' : 'inherit'}">\${formatDate(order.estDelivery)}</div></div>
+          <div><div class="detail-label">Assigned Staff</div><div class="detail-value">\${order.assignedTo || '—'}</div></div>
+          <div><div class="detail-label">Delivery Address</div><div class="detail-value">\${order.address || '—'}</div></div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+          <div>
+            <p style="font-weight:600; font-size:0.875rem; margin:0 0 0.75rem;">Order Items</p>
+            <table class="items-table">
+              <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+              <tbody>\${itemsRows}</tbody>
+            </table>
+          </div>
+          <div>
+            <p style="font-weight:600; font-size:0.875rem; margin:0 0 0.75rem;">Delivery Progress</p>
+            \${stepsHtml}
+          </div>
+        </div>
+
+        \${user.role !== 'staff' ? \`
+          <div class="status-update-section">
+            <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+              <select class="form-select" id="new-status-select" style="flex:1; min-width:160px;">
+                \${STATUSES.map(s => \`<option value="\${s}" \${s === order.status ? 'selected' : ''}>\${STATUS_ICONS[s]} \${s}</option>\`).join('')}
+              </select>
+              <button class="btn btn-primary" onclick="updateOrderStatus(\${order.id})">Update Status</button>
+            </div>
+          </div>
+        \` : ''}
+      \`;
+
+      openModal(\`Order Details — \${order.orderId}\`, modalHtml);
+    }
+
+    function updateOrderStatus(orderId) {
+      const newStatus = document.getElementById('new-status-select').value;
+      const order = MockData.orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      const oldIdx = getProgressIndex(order.status);
+      const newIdx = getProgressIndex(newStatus);
+
+      if (newIdx < oldIdx) {
+        showToast('Cannot move order backwards in pipeline', 'warning');
+        return;
+      }
+
+      order.status = newStatus;
+      showToast(\`Order \${order.orderId} updated to "\${newStatus}"\`, 'success');
+      closeModal();
+      applyFilters();
+    }
+
+    function openUpdateStatus(orderId) {
+      viewOrderDetail(orderId);
+    }
+
+    function openNewOrderModal() {
+      const customerOptions = MockData.customers.map(c =>
+        \`<option value="\${c.id}">\${c.name} — \${c.phone}</option>\`
+      ).join('');
+
+      const staffOptions = MockData.employees
+        .filter(e => e.status === 'Active')
+        .map(e => \`<option value="\${e.name}">\${e.name} (\${e.department})</option>\`)
+        .join('');
+
+      const today = new Date().toISOString().split('T')[0];
+      const nextWeek = new Date(Date.now() + 7 * 864e5).toISOString().split('T')[0];
+
+      const productOptions = MockData.products.map(p =>
+        \`<option value="\${p.id}" data-price="\${p.price}">\${p.name} — \${formatCurrency(p.price)}</option>\`
+      ).join('');
+
+      openModal('Create New Order', \`
+        <div class="form-group">
+          <label class="form-label">Customer *</label>
+          <select class="form-select" id="no-customer" required>\${customerOptions}</select>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+          <div class="form-group">
+            <label class="form-label">Order Date</label>
+            <input type="date" class="form-input" id="no-date" value="\${today}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Est. Delivery Date *</label>
+            <input type="date" class="form-input" id="no-delivery" value="\${nextWeek}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Assign Staff</label>
+          <select class="form-select" id="no-staff"><option value="">— Unassigned —</option>\${staffOptions}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Delivery Address</label>
+          <textarea class="form-textarea" id="no-address" rows="2" placeholder="Enter delivery address"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Add Product</label>
+          <div style="display:flex; gap:0.5rem;">
+            <select class="form-select" id="no-product" style="flex:2;">\${productOptions}</select>
+            <input type="number" class="form-input" id="no-qty" value="1" min="1" placeholder="Qty" style="flex:0.5; min-width:70px;">
+            <button class="btn btn-ghost" type="button" onclick="addOrderItem()">+ Add</button>
+          </div>
+        </div>
+        <div id="order-items-list" style="border:1px solid var(--border); border-radius:6px; min-height:60px; padding:0.5rem; margin-bottom:1rem;">
+          <p style="color:#aaa; font-size:0.85rem; text-align:center; margin:0.5rem;">No items added yet</p>
+        </div>
+        <div style="text-align:right;">
+          <button class="btn btn-ghost" onclick="closeModal()" style="margin-right:0.5rem;">Cancel</button>
+          <button class="btn btn-primary" onclick="saveNewOrder()">Create Order</button>
+        </div>
+      \`);
+    }
+
+    let pendingItems = [];
+
+    function addOrderItem() {
+      const sel = document.getElementById('no-product');
+      const productId = parseInt(sel.value);
+      const qty = parseInt(document.getElementById('no-qty').value) || 1;
+      const product = MockData.products.find(p => p.id === productId);
+      if (!product) return;
+
+      const existing = pendingItems.find(i => i.productId === productId);
+      if (existing) { existing.qty += qty; }
+      else { pendingItems.push({ productId, productName: product.name, qty, price: product.price }); }
+
+      renderPendingItems();
+    }
+
+    function renderPendingItems() {
+      const container = document.getElementById('order-items-list');
+      if (pendingItems.length === 0) {
+        container.innerHTML = '<p style="color:#aaa; font-size:0.85rem; text-align:center; margin:0.5rem;">No items added yet</p>';
+        return;
+      }
+      container.innerHTML = pendingItems.map((item, idx) => \`
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.5rem; border-bottom:1px solid var(--border);">
+          <span style="font-size:0.875rem;">\${item.productName}</span>
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <span style="font-size:0.875rem; color:#888;">×\${item.qty} @ \${formatCurrency(item.price)}</span>
+            <strong style="font-size:0.875rem;">\${formatCurrency(item.price * item.qty)}</strong>
+            <button class="btn btn-sm btn-danger" onclick="removePendingItem(\${idx})" style="padding:2px 6px;">✕</button>
+          </div>
+        </div>
+      \`).join('');
+    }
+
+    function removePendingItem(idx) {
+      pendingItems.splice(idx, 1);
+      renderPendingItems();
+    }
+
+    function saveNewOrder() {
+      const customerId = parseInt(document.getElementById('no-customer').value);
+      const delivery = document.getElementById('no-delivery').value;
+      const assignedTo = document.getElementById('no-staff').value;
+      const address = document.getElementById('no-address').value.trim();
+      const orderDate = document.getElementById('no-date').value;
+
+      if (!delivery) { showToast('Please set a delivery date', 'warning'); return; }
+      if (pendingItems.length === 0) { showToast('Add at least one product', 'warning'); return; }
+
+      const customer = MockData.customers.find(c => c.id === customerId);
+      const newOrder = {
+        id: MockData.orders.length + 1,
+        orderId: 'ORD-' + String(MockData.orders.length + 1001).padStart(4, '0'),
+        customerId,
+        customerName: customer ? customer.name : 'Unknown',
+        phone: customer ? customer.phone : '',
+        items: [...pendingItems],
+        status: 'Placed',
+        orderDate,
+        estDelivery: delivery,
+        assignedTo: assignedTo || null,
+        address
+      };
+
+      MockData.orders.push(newOrder);
+      allOrders = [...MockData.orders];
+      pendingItems = [];
+      showToast(\`Order \${newOrder.orderId} created!\`, 'success');
+      closeModal();
+      applyFilters();
+    }
+
+    // Init
+    allOrders = [...MockData.orders];
+    filteredOrders = [...allOrders];
+    renderPipeline(allOrders);
+    renderTable();
+  </script>
+</body>
+</html>

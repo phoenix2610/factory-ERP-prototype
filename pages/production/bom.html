@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bill of Materials — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <h1 class="page-title">📋 Bill of Materials</h1>
+          <p style="color:var(--text-muted);margin-top:0.25rem;">View and manage raw materials per product</p>
+        </div>
+      </div>
+
+      <div class="grid-2" style="gap:1.5rem;align-items:start;">
+
+        <!-- Left: Product Selector -->
+        <div class="card">
+          <div class="card-header"><strong>Select Product</strong></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Product</label>
+              <select class="form-select" id="product-select" onchange="loadBOM()">
+                <option value="">-- Select a product --</option>
+              </select>
+            </div>
+
+            <!-- Production Feasibility Calculator -->
+            <div id="calc-section" style="display:none;margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+              <strong style="font-size:0.9rem;">📊 Feasibility Check</strong>
+              <p style="color:var(--text-muted);font-size:0.8rem;margin-top:0.25rem;">Enter target quantity to check if materials are sufficient</p>
+              <div style="display:flex;gap:0.5rem;margin-top:0.75rem;">
+                <input type="number" class="form-input" id="target-qty" min="1" placeholder="Target qty..." style="flex:1;">
+                <button class="btn btn-primary btn-sm" onclick="checkFeasibility()">Check</button>
+              </div>
+              <div id="feasibility-result" style="margin-top:0.75rem;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: BOM Table -->
+        <div class="card">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <strong id="bom-title">BOM Details</strong>
+            <button class="btn btn-primary btn-sm" id="add-material-btn" style="display:none;" onclick="openAddMaterialModal()">+ Add Material</button>
+          </div>
+          <div class="card-body" style="padding:0;" id="bom-body">
+            <div style="text-align:center;padding:3rem;color:var(--text-muted);">
+              <div style="font-size:2.5rem;margin-bottom:0.5rem;">👈</div>
+              <p>Select a product to view its BOM</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    let currentProductId = null;
+
+    // Populate product dropdown
+    function init() {
+      const sel = document.getElementById('product-select');
+      MockData.products.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        sel.appendChild(opt);
+      });
+    }
+
+    function loadBOM() {
+      const sel = document.getElementById('product-select');
+      currentProductId = sel.value ? parseInt(sel.value) : null;
+      const product = MockData.products.find(p => p.id === currentProductId);
+
+      if (!currentProductId || !product) {
+        document.getElementById('bom-body').innerHTML = \`<div style="text-align:center;padding:3rem;color:var(--text-muted);">Select a product to view BOM</div>\`;
+        document.getElementById('bom-title').textContent = 'BOM Details';
+        document.getElementById('add-material-btn').style.display = 'none';
+        document.getElementById('calc-section').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('bom-title').textContent = \`BOM — \${product.name}\`;
+      document.getElementById('add-material-btn').style.display = 'inline-flex';
+      document.getElementById('calc-section').style.display = 'block';
+      document.getElementById('feasibility-result').innerHTML = '';
+      renderBOMTable();
+    }
+
+    function renderBOMTable(highlightInsufficient = false, targetQty = 1) {
+      const entries = MockData.bomEntries.filter(e => e.productId === currentProductId);
+      const body = document.getElementById('bom-body');
+
+      if (entries.length === 0) {
+        body.innerHTML = \`<div style="text-align:center;padding:2rem;color:var(--text-muted);">No materials defined. Click "+ Add Material" to start.</div>\`;
+        return;
+      }
+
+      body.innerHTML = \`
+        <table class="table-base" style="width:100%;">
+          <thead>
+            <tr>
+              <th>Material Name</th>
+              <th>Qty/Unit</th>
+              <th>Unit</th>
+              <th>Available Stock</th>
+              <th>Required (×\${targetQty})</th>
+              <th>Sufficient?</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            \${entries.map(e => {
+              const material = MockData.products.find(p => p.name === e.materialName) ||
+                               MockData.products.find(p => p.id === e.materialId);
+              const availableStock = material ? material.stock : (e.availableStock || 0);
+              const required = e.qtyPerUnit * targetQty;
+              const sufficient = availableStock >= required;
+              const highlight = highlightInsufficient && !sufficient;
+
+              return \`
+                <tr style="\${highlight ? 'background:rgba(239,68,68,0.08);' : ''}">
+                  <td style="font-weight:500;">\${e.materialName}</td>
+                  <td>\${e.qtyPerUnit}</td>
+                  <td>\${e.unit}</td>
+                  <td>\${availableStock}</td>
+                  <td style="\${highlight ? 'color:var(--danger);font-weight:600;' : ''}">\${required}</td>
+                  <td>
+                    \${sufficient
+                      ? '<span class="badge badge-success">✅ Yes</span>'
+                      : '<span class="badge badge-danger">❌ No</span>'}
+                  </td>
+                  <td>
+                    <button class="btn btn-danger btn-sm" onclick="removeMaterial(\${e.id})">🗑️</button>
+                  </td>
+                </tr>\`;
+            }).join('')}
+          </tbody>
+        </table>
+      \`;
+    }
+
+    function checkFeasibility() {
+      const qty = parseInt(document.getElementById('target-qty').value);
+      if (!qty || qty < 1) { showToast('Enter a valid quantity', 'warning'); return; }
+
+      const entries = MockData.bomEntries.filter(e => e.productId === currentProductId);
+      let allSufficient = true;
+
+      entries.forEach(e => {
+        const material = MockData.products.find(p => p.name === e.materialName);
+        const available = material ? material.stock : (e.availableStock || 0);
+        if (available < e.qtyPerUnit * qty) allSufficient = false;
+      });
+
+      renderBOMTable(true, qty);
+
+      const resultEl = document.getElementById('feasibility-result');
+      if (allSufficient) {
+        resultEl.innerHTML = \`<div style="padding:0.75rem;background:rgba(34,197,94,0.1);border-radius:8px;border:1px solid var(--success);color:var(--success);font-weight:500;">✅ All materials sufficient for \${qty} units</div>\`;
+      } else {
+        resultEl.innerHTML = \`<div style="padding:0.75rem;background:rgba(239,68,68,0.1);border-radius:8px;border:1px solid var(--danger);color:var(--danger);font-weight:500;">⚠️ Insufficient materials highlighted in red</div>\`;
+      }
+    }
+
+    function openAddMaterialModal() {
+      openModal('Add Material to BOM', \`
+        <div class="form-group">
+          <label class="form-label">Material Name *</label>
+          <input type="text" class="form-input" id="mat-name" placeholder="e.g. Plywood Sheet">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Qty Per Unit *</label>
+          <input type="number" class="form-input" id="mat-qty" min="0.01" step="0.01" placeholder="e.g. 2.5">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unit *</label>
+          <select class="form-select" id="mat-unit">
+            <option value="kg">kg</option>
+            <option value="pcs">pcs</option>
+            <option value="liters">liters</option>
+            <option value="meters">meters</option>
+            <option value="sheet">sheet</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Available Stock (Current)</label>
+          <input type="number" class="form-input" id="mat-stock" min="0" placeholder="e.g. 500">
+        </div>
+        <div style="display:flex;gap:0.75rem;margin-top:1rem;">
+          <button class="btn btn-primary" onclick="addMaterial()">Add</button>
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        </div>
+      \`);
+    }
+
+    function addMaterial() {
+      const name = document.getElementById('mat-name').value.trim();
+      const qty = parseFloat(document.getElementById('mat-qty').value);
+      const unit = document.getElementById('mat-unit').value;
+      const stock = parseInt(document.getElementById('mat-stock').value) || 0;
+
+      if (!name || !qty) { showToast('Fill all required fields', 'warning'); return; }
+
+      const newId = Math.max(...MockData.bomEntries.map(e => e.id), 0) + 1;
+      MockData.bomEntries.push({
+        id: newId,
+        productId: currentProductId,
+        materialName: name,
+        qtyPerUnit: qty,
+        unit,
+        availableStock: stock,
+      });
+
+      closeModal();
+      showToast(\`"\${name}" added to BOM\`, 'success');
+      renderBOMTable();
+    }
+
+    function removeMaterial(id) {
+      const idx = MockData.bomEntries.findIndex(e => e.id === id);
+      if (idx !== -1) MockData.bomEntries.splice(idx, 1);
+      showToast('Material removed', 'success');
+      renderBOMTable();
+    }
+
+    init();
+  </script>
+</body>
+</html>

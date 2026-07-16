@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Goods Receipt Note — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <h1 class="page-title">📥 Create Goods Receipt Note (GRN)</h1>
+          <p style="color:var(--text-muted);margin-top:0.25rem;">Receive items against a Purchase Order</p>
+        </div>
+        <a href="/pages/purchase/index.html" class="btn btn-ghost">← Back to POs</a>
+      </div>
+
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-header"><strong>Select Purchase Order</strong></div>
+        <div class="card-body">
+          <div style="display:flex;gap:1rem;max-width:500px;">
+            <select class="form-select" id="po-select" style="flex:1;">
+              <option value="">-- Select Pending PO --</option>
+            </select>
+            <button class="btn btn-primary" onclick="loadPO()">Load Items</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="grn-section" style="display:none;">
+        <div class="card">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <strong>Items to Receive</strong>
+            <span id="grn-po-info" style="color:var(--text-muted);font-size:0.85rem;"></span>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <table class="table-base" style="width:100%;">
+              <thead>
+                <tr>
+                  <th>Item Name</th>
+                  <th>Ordered Qty</th>
+                  <th>Already Received</th>
+                  <th>Now Receiving *</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="grn-tbody"></tbody>
+            </table>
+          </div>
+          <div class="card-body" style="border-top:1px solid var(--border);">
+            <div class="form-group" style="margin-bottom:1.5rem;">
+              <label class="form-label">GRN Notes</label>
+              <textarea class="form-textarea" id="grn-notes" rows="2" placeholder="Quality checks, damages, missing items..."></textarea>
+            </div>
+            <div style="display:flex;gap:0.75rem;">
+              <button class="btn btn-success" onclick="submitGRN()" style="flex:1;">✅ Receive Goods & Update Inventory</button>
+              <button class="btn btn-ghost" onclick="cancelGRN()" style="flex:1;text-align:center;">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    let currentPO = null;
+
+    function init() {
+      const sel = document.getElementById('po-select');
+      const pendingPOs = (MockData.purchaseOrders || []).filter(po => po.status !== 'completed' && po.status !== 'cancelled');
+
+      if (pendingPOs.length === 0) {
+        sel.innerHTML = '<option value="">No pending POs available</option>';
+        sel.disabled = true;
+      } else {
+        pendingPOs.forEach(po => {
+          const supplier = (MockData.suppliers || []).find(s => s.id === po.supplierId);
+          const sName = supplier ? supplier.name : 'Unknown Supplier';
+          sel.innerHTML += \`<option value="\${po.id}">\${po.poNumber} (\${sName})</option>\`;
+        });
+      }
+    }
+
+    function loadPO() {
+      const poId = document.getElementById('po-select').value;
+      if (!poId) return;
+
+      currentPO = MockData.purchaseOrders.find(p => p.id == poId);
+      if (!currentPO) return;
+
+      const supplier = (MockData.suppliers || []).find(s => s.id === currentPO.supplierId);
+      document.getElementById('grn-po-info').textContent = \`PO: \${currentPO.poNumber} | Supplier: \${supplier ? supplier.name : 'Unknown'}\`;
+
+      const tbody = document.getElementById('grn-tbody');
+      tbody.innerHTML = (currentPO.items || []).map((item, idx) => {
+        const received = item.receivedQty || 0;
+        const remaining = item.qty - received;
+
+        return \`
+          <tr>
+            <td style="font-weight:500;">\${item.name}</td>
+            <td>\${item.qty} \${item.unit || ''}</td>
+            <td>\${received} \${item.unit || ''}</td>
+            <td style="max-width:150px;">
+              <input type="number" class="form-input grn-qty-input" data-idx="\${idx}" max="\${remaining}" min="0" value="\${remaining > 0 ? remaining : 0}" \${remaining === 0 ? 'disabled' : ''}>
+            </td>
+            <td>
+              \${remaining === 0
+                ? '<span class="badge badge-success">Fully Received</span>'
+                : '<span class="badge badge-warning">Pending</span>'}
+            </td>
+          </tr>
+        \`;
+      }).join('');
+
+      document.getElementById('grn-section').style.display = 'block';
+    }
+
+    function submitGRN() {
+      if (!currentPO) return;
+
+      const inputs = document.querySelectorAll('.grn-qty-input');
+      let totalReceivedNow = 0;
+
+      inputs.forEach(input => {
+        const idx = input.dataset.idx;
+        const qtyToReceive = parseInt(input.value) || 0;
+        if (qtyToReceive > 0 && currentPO.items[idx]) {
+          // Update PO item
+          currentPO.items[idx].receivedQty = (currentPO.items[idx].receivedQty || 0) + qtyToReceive;
+          totalReceivedNow += qtyToReceive;
+
+          // Update Inventory (Find if product exists by name, else create raw material)
+          let product = MockData.products.find(p => p.name.toLowerCase() === currentPO.items[idx].name.toLowerCase());
+          if (product) {
+            product.stock += qtyToReceive;
+          } else {
+            const newId = Math.max(...MockData.products.map(p => p.id), 0) + 1;
+            MockData.products.push({
+              id: newId,
+              name: currentPO.items[idx].name,
+              sku: \`RAW-\${String(newId).padStart(4,'0')}\`,
+              categoryId: 1, // Default to a category
+              price: currentPO.items[idx].unitPrice,
+              stock: qtyToReceive,
+              minStock: 10,
+              unit: currentPO.items[idx].unit || 'pcs',
+              status: 'active'
+            });
+          }
+        }
+      });
+
+      if (totalReceivedNow === 0) {
+        showToast('Please enter quantity to receive > 0 for at least one item.', 'warning');
+        return;
+      }
+
+      // Check if PO is fully received
+      const isFullyReceived = currentPO.items.every(i => (i.receivedQty || 0) >= i.qty);
+      if (isFullyReceived) {
+        currentPO.status = 'received';
+      } else {
+        currentPO.status = 'ordered'; // Partially received
+      }
+
+      showToast(\`GRN created successfully! \${totalReceivedNow} items received.\`, 'success');
+
+      // Reset
+      document.getElementById('grn-section').style.display = 'none';
+      document.getElementById('po-select').value = '';
+      currentPO = null;
+    }
+
+    function cancelGRN() {
+      document.getElementById('grn-section').style.display = 'none';
+      currentPO = null;
+    }
+
+    init();
+  </script>
+</body>
+</html>

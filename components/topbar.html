@@ -1,0 +1,49 @@
+
+
+<!--
+  components/topbar.html — Top Bar Component
+  Factory ERP Prototype | Claude A — Foundation Layer
+
+  Injected into every page by router.js.
+  Page title and breadcrumb updated dynamically by setActivePage().
+-->
+<header class="topbar">
+
+  <!-- Left: Page Title + Breadcrumb -->
+  <div class="topbar-left">
+    <h1 class="page-title" id="page-title">Dashboard</h1>
+    <div class="breadcrumb" id="breadcrumb">Home</div>
+  </div>
+
+  <!-- Right: Search + Notifications + User -->
+  <div class="topbar-right">
+
+    <!-- Global Search -->
+    <div class="search-box">
+      <input
+        type="text"
+        id="global-search"
+        class="form-input"
+        placeholder="🔍  Search..."
+        autocomplete="off"
+      />
+    </div>
+
+    <!-- Notification Bell -->
+    <div class="notification-bell" id="notification-bell" title="Notifications">
+      🔔
+      <span class="badge badge-danger notification-count" id="notification-count">3</span>
+    </div>
+
+    <!-- User Avatar -->
+    <div class="user-avatar-small" id="topbar-user-avatar" title="Profile">A</div>
+
+  </div>
+
+</header>
+
+<!-- Notification Dropdown (toggled by bell click via router.js) -->
+<div class="notification-dropdown" id="notification-dropdown" style="display:none;">
+  <!-- Populated dynamically by router.js → _populateNotifications() -->
+</div>
+

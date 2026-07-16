@@ -1,0 +1,130 @@
+<!--
+  components/sidebar.html — Role-Aware Navigation Sidebar
+  Factory ERP Prototype | Claude A — Foundation Layer
+
+  Injected into every page by router.js.
+  router.js populates user info and applies RBAC visibility.
+-->
+<aside class="sidebar">
+
+  <!-- Header: Logo + Brand -->
+  <div class="sidebar-header">
+    <div class="logo-placeholder">🏭</div>
+    <h3 class="brand-name">Factory ERP</h3>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="sidebar-nav">
+
+    <!-- Core -->
+    <a href="/pages/dashboard.html" class="nav-link" data-page="dashboard" data-permission="all">
+      <i class="icon">📊</i>
+      <span class="nav-link-text">Dashboard</span>
+    </a>
+
+    <!-- Inventory -->
+    <a href="/pages/inventory/index.html" class="nav-link" data-page="inventory" data-permission="inventory">
+      <i class="icon">📦</i>
+      <span class="nav-link-text">Inventory</span>
+    </a>
+
+    <!-- Production -->
+    <a href="/pages/production/kanban.html" class="nav-link" data-page="production" data-permission="production">
+      <i class="icon">🏭</i>
+      <span class="nav-link-text">Production</span>
+    </a>
+
+    <!-- Purchase -->
+    <a href="/pages/purchase/index.html" class="nav-link" data-page="purchase" data-permission="purchase">
+      <i class="icon">🛒</i>
+      <span class="nav-link-text">Purchase</span>
+    </a>
+
+    <!-- Sales / Invoices -->
+    <a href="/pages/sales/invoices.html" class="nav-link" data-page="sales/invoices" data-permission="sales">
+      <i class="icon">💰</i>
+      <span class="nav-link-text">B2B Sales &amp; Credit</span>
+    </a>
+
+    <!-- Customers -->
+    <a href="/pages/customers/index.html" class="nav-link" data-page="customers" data-permission="customers">
+      <i class="icon">👥</i>
+      <span class="nav-link-text">Customers</span>
+    </a>
+
+    <!-- Orders -->
+    <a href="/pages/orders/index.html" class="nav-link" data-page="orders" data-permission="orders">
+      <i class="icon">🚚</i>
+      <span class="nav-link-text">Orders &amp; Delivery</span>
+    </a>
+
+    <!-- Returns -->
+    <a href="/pages/returns.html" class="nav-link" data-page="returns" data-permission="sales">
+      <i class="icon">↩️</i>
+      <span class="nav-link-text">Returns</span>
+    </a>
+
+    <!-- Employees -->
+    <a href="/pages/employees/index.html" class="nav-link" data-page="employees" data-permission="employees">
+      <i class="icon">👤</i>
+      <span class="nav-link-text">Employees</span>
+    </a>
+
+    <!-- Pricing -->
+    <a href="/pages/pricing/index.html" class="nav-link" data-page="pricing" data-permission="pricing">
+      <i class="icon">🏷️</i>
+      <span class="nav-link-text">Pricing</span>
+    </a>
+
+    <!-- Reports -->
+    <a href="/pages/reports/index.html" class="nav-link" data-page="reports" data-permission="reports">
+      <i class="icon">📈</i>
+      <span class="nav-link-text">Reports</span>
+    </a>
+
+    <!-- Settings (Admin only) -->
+    <a href="/pages/settings/index.html" class="nav-link" data-page="settings" data-permission="settings">
+      <i class="icon">⚙️</i>
+      <span class="nav-link-text">Settings</span>
+    </a>
+
+    <!-- Divider before Coming Soon items -->
+    <div style="height:1px; background:#1e293b; margin:8px 0;"></div>
+
+    <!-- Coming Soon — Accounting -->
+    <div class="nav-link-disabled" title="Available in full product">
+      <i class="icon">📋</i>
+      <span class="nav-link-text">Accounting</span>
+      <span class="coming-soon-badge">Soon</span>
+    </div>
+
+    <!-- Coming Soon — Multi Branch -->
+    <div class="nav-link-disabled" title="Available in full product">
+      <i class="icon">🏢</i>
+      <span class="nav-link-text">Multi-Branch</span>
+      <span class="coming-soon-badge">Soon</span>
+    </div>
+
+    <!-- Coming Soon — Integrations -->
+    <div class="nav-link-disabled" title="Available in full product">
+      <i class="icon">🔌</i>
+      <span class="nav-link-text">Integrations</span>
+      <span class="coming-soon-badge">Soon</span>
+    </div>
+
+  </nav>
+
+  <!-- Footer: User info + Logout -->
+  <div class="sidebar-footer">
+    <div class="user-info">
+      <div class="user-avatar" id="user-avatar">A</div>
+      <div>
+        <div class="user-name" id="user-name">Admin User</div>
+        <span class="badge badge-info user-role" id="user-role">Admin</span>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="logout-btn">Logout</button>
+  </div>
+
+</aside>
+

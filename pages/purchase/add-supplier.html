@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Supplier — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <h1 class="page-title" id="page-heading">➕ Add Supplier</h1>
+          <p style="color:var(--text-muted);margin-top:0.25rem;">Fill in supplier details below</p>
+        </div>
+        <a href="/pages/purchase/index.html" class="btn btn-ghost">← Back to Purchase</a>
+      </div>
+
+      <div class="grid-2" style="gap:1.5rem;align-items:start;">
+
+        <!-- Main Info -->
+        <div class="card">
+          <div class="card-header"><strong>Supplier Information</strong></div>
+          <div class="card-body">
+
+            <div class="form-group">
+              <label class="form-label">Supplier Name *</label>
+              <input type="text" class="form-input" id="sup-name" placeholder="e.g. Jain Timber Suppliers">
+              <span class="form-error" id="name-error" style="display:none;">Name is required.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Contact Person</label>
+              <input type="text" class="form-input" id="sup-contact" placeholder="e.g. Rakesh Jain">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Phone *</label>
+              <input type="tel" class="form-input" id="sup-phone" placeholder="e.g. 9876543210">
+              <span class="form-error" id="phone-error" style="display:none;">Phone is required.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-input" id="sup-email" placeholder="supplier@email.com">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Address</label>
+              <textarea class="form-textarea" id="sup-address" rows="3" placeholder="Full address..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">GST Number</label>
+              <input type="text" class="form-input" id="sup-gst" placeholder="e.g. 27AAFCM1234A1Z5" style="text-transform:uppercase;">
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Categories & Notes -->
+        <div style="display:flex;flex-direction:column;gap:1.5rem;">
+          <div class="card">
+            <div class="card-header"><strong>Product Categories</strong></div>
+            <div class="card-body">
+              <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:0.75rem;">Select all categories this supplier can supply:</p>
+              <div id="categories-checkboxes" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><strong>Additional Notes</strong></div>
+            <div class="card-body">
+              <textarea class="form-textarea" id="sup-notes" rows="4" placeholder="Payment terms, delivery time, special conditions..."></textarea>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:0.75rem;">
+            <button class="btn btn-primary" onclick="saveSupplier()" style="flex:1;">💾 Save Supplier</button>
+            <a href="/pages/purchase/index.html" class="btn btn-ghost" style="flex:1;text-align:center;">Cancel</a>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const supplierId = urlParams.get('id');
+    let editSupplier = null;
+
+    const ALL_CATEGORIES = ['Raw Materials', 'Wood & Timber', 'Hardware', 'Packaging', 'Chemicals', 'Tools & Equipment'];
+
+    function renderCategoryCheckboxes(selectedCats = []) {
+      const container = document.getElementById('categories-checkboxes');
+      container.innerHTML = ALL_CATEGORIES.map(cat => \`
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;padding:0.375rem 0;">
+          <input type="checkbox" value="\${cat}" \${selectedCats.includes(cat) ? 'checked' : ''}
+            style="width:16px;height:16px;cursor:pointer;">
+          <span>\${cat}</span>
+        </label>
+      \`).join('');
+    }
+
+    function getSelectedCategories() {
+      return [...document.querySelectorAll('#categories-checkboxes input:checked')].map(cb => cb.value);
+    }
+
+    function validate() {
+      let valid = true;
+      [
+        { id: 'sup-name', errId: 'name-error', msg: 'Supplier name is required.' },
+        { id: 'sup-phone', errId: 'phone-error', msg: 'Phone number is required.' },
+      ].forEach(f => {
+        const el = document.getElementById(f.id);
+        const err = document.getElementById(f.errId);
+        if (!el.value.trim()) {
+          err.textContent = f.msg;
+          err.style.display = 'block';
+          el.style.borderColor = 'var(--danger)';
+          valid = false;
+        } else {
+          err.style.display = 'none';
+          el.style.borderColor = '';
+        }
+      });
+      return valid;
+    }
+
+    function saveSupplier() {
+      if (!validate()) { showToast('Please fix the errors above', 'error'); return; }
+
+      const data = {
+        name: document.getElementById('sup-name').value.trim(),
+        contactPerson: document.getElementById('sup-contact').value.trim(),
+        phone: document.getElementById('sup-phone').value.trim(),
+        email: document.getElementById('sup-email').value.trim(),
+        address: document.getElementById('sup-address').value.trim(),
+        gstNumber: document.getElementById('sup-gst').value.trim().toUpperCase(),
+        categories: getSelectedCategories(),
+        notes: document.getElementById('sup-notes').value.trim(),
+      };
+
+      if (editSupplier) {
+        Object.assign(editSupplier, data);
+        showToast('Supplier updated successfully!', 'success');
+      } else {
+        const newId = Math.max(...(MockData.suppliers || []).map(s => s.id), 0) + 1;
+        if (!MockData.suppliers) MockData.suppliers = [];
+        MockData.suppliers.push({ id: newId, ...data });
+        showToast('Supplier added successfully!', 'success');
+      }
+
+      setTimeout(() => { window.location.href = '/pages/purchase/index.html'; }, 1000);
+    }
+
+    // Init
+    if (supplierId) {
+      editSupplier = (MockData.suppliers || []).find(s => s.id == supplierId);
+      if (editSupplier) {
+        document.getElementById('page-heading').textContent = '✏️ Edit Supplier';
+        document.title = 'Edit Supplier — Factory ERP';
+        document.getElementById('sup-name').value = editSupplier.name;
+        document.getElementById('sup-contact').value = editSupplier.contactPerson || '';
+        document.getElementById('sup-phone').value = editSupplier.phone || '';
+        document.getElementById('sup-email').value = editSupplier.email || '';
+        document.getElementById('sup-address').value = editSupplier.address || '';
+        document.getElementById('sup-gst').value = editSupplier.gstNumber || '';
+        document.getElementById('sup-notes').value = editSupplier.notes || '';
+        renderCategoryCheckboxes(editSupplier.categories || []);
+      }
+    } else {
+      renderCategoryCheckboxes();
+    }
+  </script>
+</body>
+</html>

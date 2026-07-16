@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wastage Log — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <div>
+          <h1 class="page-title">♻️ Wastage Log</h1>
+          <p style="color:var(--text-muted);margin-top:0.25rem;">Track material losses across production stages</p>
+        </div>
+      </div>
+
+      <!-- Monthly Summary Banner -->
+      <div id="wastage-banner" style="margin-bottom:1.25rem;padding:1rem 1.5rem;background:linear-gradient(135deg,#fef3c7,#fde68a);border-radius:12px;border:1px solid #f59e0b;display:flex;justify-content:space-around;align-items:center;flex-wrap:wrap;gap:1rem;">
+        <div style="text-align:center;">
+          <div style="font-size:0.8rem;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;">This Month's Wastage</div>
+          <div style="font-size:1.75rem;font-weight:700;color:#78350f;" id="banner-qty">—</div>
+          <div style="font-size:0.75rem;color:#92400e;">total units wasted</div>
+        </div>
+        <div style="width:1px;height:50px;background:#f59e0b;"></div>
+        <div style="text-align:center;">
+          <div style="font-size:0.8rem;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;">Estimated Loss</div>
+          <div style="font-size:1.75rem;font-weight:700;color:#78350f;" id="banner-loss">—</div>
+          <div style="font-size:0.75rem;color:#92400e;">₹ value lost</div>
+        </div>
+        <div style="width:1px;height:50px;background:#f59e0b;"></div>
+        <div style="text-align:center;">
+          <div style="font-size:0.8rem;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;">Top Reason</div>
+          <div style="font-size:1.2rem;font-weight:700;color:#78350f;" id="banner-reason">—</div>
+          <div style="font-size:0.75rem;color:#92400e;">most common cause</div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="gap:1.5rem;align-items:start;">
+
+        <!-- Log Form -->
+        <div class="card">
+          <div class="card-header"><strong>📝 Log Wastage</strong></div>
+          <div class="card-body">
+
+            <div class="form-group">
+              <label class="form-label">Product / Material *</label>
+              <select class="form-select" id="waste-product">
+                <option value="">Select product...</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Quantity Wasted *</label>
+              <input type="number" class="form-input" id="waste-qty" min="0.01" step="0.01" placeholder="e.g. 5">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Production Stage *</label>
+              <select class="form-select" id="waste-stage">
+                <option value="pending">Pending</option>
+                <option value="raw">Raw Material</option>
+                <option value="cutting">Cutting</option>
+                <option value="assembly">Assembly</option>
+                <option value="qc">QC Check</option>
+                <option value="packed">Packed</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Reason *</label>
+              <select class="form-select" id="waste-reason">
+                <option value="Damaged">Damaged</option>
+                <option value="Wrong Dimensions">Wrong Dimensions</option>
+                <option value="Operator Error">Operator Error</option>
+                <option value="Machine Fault">Machine Fault</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Date</label>
+              <input type="date" class="form-input" id="waste-date">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Notes</label>
+              <textarea class="form-textarea" id="waste-notes" rows="3" placeholder="Additional details..."></textarea>
+            </div>
+
+            <button class="btn btn-primary" onclick="logWastage()" style="width:100%;">Submit Wastage Entry</button>
+          </div>
+        </div>
+
+        <!-- Recent Log -->
+        <div class="card">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <strong>Recent Entries</strong>
+            <span style="color:var(--text-muted);font-size:0.8rem;">Last 10 records</span>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <table class="table-base" style="width:100%;">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Qty</th>
+                  <th>Stage</th>
+                  <th>Reason</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="wastage-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    const REASON_BADGES = {
+      'Damaged':         '<span class="badge badge-danger">Damaged</span>',
+      'Wrong Dimensions':'<span class="badge badge-warning">Wrong Dim.</span>',
+      'Operator Error':  '<span class="badge badge-danger">Operator Err</span>',
+      'Machine Fault':   '<span class="badge badge-warning">Machine Fault</span>',
+      'Other':           '<span class="badge badge-info">Other</span>',
+    };
+
+    function init() {
+      // Set today's date
+      document.getElementById('waste-date').value = new Date().toISOString().split('T')[0];
+
+      // Populate product dropdown
+      const sel = document.getElementById('waste-product');
+      MockData.products.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = \`\${p.name} (\${p.unit})\`;
+        sel.appendChild(opt);
+      });
+
+      updateBanner();
+      renderRecentLog();
+    }
+
+    function updateBanner() {
+      const now = new Date();
+      const thisMonth = now.getMonth();
+      const thisYear = now.getFullYear();
+
+      const monthEntries = (MockData.wastageLog || []).filter(e => {
+        const d = new Date(e.date);
+        return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+      });
+
+      const totalQty = monthEntries.reduce((sum, e) => sum + (e.quantity || 0), 0);
+      const totalLoss = monthEntries.reduce((sum, e) => sum + (e.estimatedLoss || 0), 0);
+
+      // Find most common reason
+      const reasonCounts = {};
+      monthEntries.forEach(e => { reasonCounts[e.reason] = (reasonCounts[e.reason] || 0) + 1; });
+      const topReason = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1])[0];
+
+      document.getElementById('banner-qty').textContent = totalQty.toFixed(1);
+      document.getElementById('banner-loss').textContent = formatCurrency(totalLoss);
+      document.getElementById('banner-reason').textContent = topReason ? topReason[0] : 'N/A';
+    }
+
+    function renderRecentLog() {
+      const recent = [...(MockData.wastageLog || [])].reverse().slice(0, 10);
+      const tbody = document.getElementById('wastage-tbody');
+
+      if (recent.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted);">No entries yet.</td></tr>\`;
+        return;
+      }
+
+      tbody.innerHTML = recent.map(e => \`
+        <tr>
+          <td style="font-weight:500;">\${e.productName || 'N/A'}</td>
+          <td>\${e.quantity} \${e.unit || ''}</td>
+          <td><span class="badge badge-info">\${e.stage || 'N/A'}</span></td>
+          <td>\${REASON_BADGES[e.reason] || e.reason}</td>
+          <td style="color:var(--text-muted);">\${formatDate(e.date)}</td>
+        </tr>
+      \`).join('');
+    }
+
+    function logWastage() {
+      const productSel = document.getElementById('waste-product');
+      const qty = parseFloat(document.getElementById('waste-qty').value);
+      const stage = document.getElementById('waste-stage').value;
+      const reason = document.getElementById('waste-reason').value;
+      const date = document.getElementById('waste-date').value;
+
+      if (!productSel.value || !qty || !date) {
+        showToast('Fill all required fields', 'warning');
+        return;
+      }
+
+      const product = MockData.products.find(p => p.id == productSel.value);
+      const estimatedLoss = product ? qty * product.price : 0;
+
+      const newId = Math.max(...(MockData.wastageLog || []).map(e => e.id), 0) + 1;
+      if (!MockData.wastageLog) MockData.wastageLog = [];
+
+      MockData.wastageLog.push({
+        id: newId,
+        productId: parseInt(productSel.value),
+        productName: product ? product.name : 'Unknown',
+        unit: product ? product.unit : '',
+        quantity: qty,
+        stage,
+        reason,
+        date,
+        notes: document.getElementById('waste-notes').value,
+        estimatedLoss,
+      });
+
+      // Reset form
+      document.getElementById('waste-product').value = '';
+      document.getElementById('waste-qty').value = '';
+      document.getElementById('waste-notes').value = '';
+
+      showToast('Wastage entry logged successfully!', 'success');
+      updateBanner();
+      renderRecentLog();
+    }
+
+    init();
+  </script>
+</body>
+</html>

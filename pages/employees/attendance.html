@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <style>
+    .att-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:1rem; }
+    .att-card { background:#fff; border:1px solid var(--border); border-radius:10px; padding:1rem; display:flex; align-items:center; gap:0.75rem; }
+    .att-avatar { width:40px;height:40px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.9rem;flex-shrink:0; }
+    .att-btn { border:none;cursor:pointer;font-size:0.7rem;font-weight:600;padding:4px 8px;border-radius:6px;transition:all .15s; }
+    .att-btn-p { background:#dcfce7;color:#16a34a; } .att-btn-p.sel,.att-btn-p:hover { background:#16a34a;color:#fff; }
+    .att-btn-a { background:#fee2e2;color:#dc2626; } .att-btn-a.sel,.att-btn-a:hover { background:#dc2626;color:#fff; }
+    .att-btn-l { background:#fef3c7;color:#b45309; } .att-btn-l.sel,.att-btn-l:hover { background:#b45309;color:#fff; }
+    .att-btn-h { background:#ede9fe;color:#6d28d9; } .att-btn-h.sel,.att-btn-h:hover { background:#6d28d9;color:#fff; }
+    .stat-row { display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem; }
+    .stat-box { background:#fff;border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;text-align:center; }
+    .stat-box .num { font-size:1.75rem;font-weight:700; } .stat-box .lbl { font-size:0.75rem;color:#888;text-transform:uppercase; }
+    .tab-bar { display:flex;border-bottom:2px solid var(--border);margin-bottom:1.25rem; }
+    .tab-btn { padding:.625rem 1.25rem;border:none;background:none;cursor:pointer;font-weight:500;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s; }
+    .tab-btn.active { color:var(--primary);border-bottom-color:var(--primary); }
+    .tab-content { display:none; } .tab-content.active { display:block; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <h1 style="font-size:1.5rem;font-weight:700;margin:0;">🗓️ Attendance</h1>
+          <p style="color:#888;font-size:.875rem;margin:4px 0 0;">Mark and review employee attendance</p>
+        </div>
+        <div style="display:flex;gap:.75rem;align-items:center;">
+          <input type="date" class="form-input" id="att-date" style="height:38px;">
+          <button class="btn btn-primary" onclick="saveAttendance()">💾 Save</button>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-box"><div class="lbl">✅ Present</div><div class="num" id="s-p" style="color:#16a34a;">0</div></div>
+        <div class="stat-box"><div class="lbl">❌ Absent</div><div class="num" id="s-a" style="color:#dc2626;">0</div></div>
+        <div class="stat-box"><div class="lbl">🏖️ Leave</div><div class="num" id="s-l" style="color:#b45309;">0</div></div>
+        <div class="stat-box"><div class="lbl">⏱ Half Day</div><div class="num" id="s-h" style="color:#6d28d9;">0</div></div>
+      </div>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('mark',this)">Mark Attendance</button>
+        <button class="tab-btn" onclick="switchTab('history',this)">History Log</button>
+      </div>
+
+      <div class="tab-content active" id="tab-mark">
+        <div style="display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;">
+          <input type="text" class="form-input" id="search-emp" placeholder="🔍 Search..." oninput="filterCards()" style="flex:1;min-width:180px;height:38px;">
+          <select class="form-select" id="dept-f" onchange="filterCards()" style="min-width:160px;height:38px;">
+            <option value="">All Departments</option>
+            <option>Production</option><option>QC</option><option>Dispatch</option><option>Inventory</option><option>HR</option>
+          </select>
+          <button class="btn btn-ghost" onclick="markAll('Present')">✅ All Present</button>
+        </div>
+        <div class="att-grid" id="att-grid"></div>
+      </div>
+
+      <div class="tab-content" id="tab-history">
+        <div style="display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center;">
+          <input type="month" class="form-input" id="hist-month" style="height:38px;">
+          <select class="form-select" id="hist-emp" style="min-width:200px;height:38px;"><option value="">All Employees</option></select>
+          <button class="btn btn-ghost" onclick="renderHistory()">Filter</button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0;overflow-x:auto;">
+            <table class="table-base">
+              <thead><tr><th>Date</th><th>Employee</th><th>Department</th><th>Shift</th><th>Status</th></tr></thead>
+              <tbody id="history-tbody"><tr><td colspan="5" style="text-align:center;padding:2rem;color:#888;">Select a month to view history</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+    if (!MockData.attendance) MockData.attendance = {};
+    let employees = MockData.employees.filter(e => e.status === 'Active');
+    let todayKey = new Date().toISOString().split('T')[0];
+
+    function getInitials(n) { return (n||'?').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase(); }
+
+    function switchTab(tab, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-'+tab).classList.add('active');
+      if (tab === 'history') renderHistory();
+    }
+
+    function getDayRecord(k) { if (!MockData.attendance[k]) MockData.attendance[k]={}; return MockData.attendance[k]; }
+
+    function setStatus(empId, status) {
+      getDayRecord(todayKey)[empId] = status;
+      document.querySelectorAll(`.att-btn[data-e="${empId}"]`).forEach(b => b.classList.toggle('sel', b.dataset.s === status));
+      updateStats();
+    }
+
+    function markAll(status) {
+      const rec = getDayRecord(todayKey);
+      document.querySelectorAll('.att-card').forEach(card => {
+        if (card.style.display === 'none') return;
+        const id = parseInt(card.dataset.empid);
+        rec[id] = status;
+        card.querySelectorAll('.att-btn').forEach(b => b.classList.toggle('sel', b.dataset.s === status));
+      });
+      updateStats();
+      showToast('All visible employees marked as ' + status, 'success');
+    }
+
+    function updateStats() {
+      const vals = Object.values(getDayRecord(todayKey));
+      document.getElementById('s-p').textContent = vals.filter(v=>v==='Present').length;
+      document.getElementById('s-a').textContent = vals.filter(v=>v==='Absent').length;
+      document.getElementById('s-l').textContent = vals.filter(v=>v==='Leave').length;
+      document.getElementById('s-h').textContent = vals.filter(v=>v==='Half Day').length;
+    }
+
+    function filterCards() {
+      const s = document.getElementById('search-emp').value.toLowerCase();
+      const d = document.getElementById('dept-f').value;
+      document.querySelectorAll('.att-card').forEach(card => {
+        const emp = employees.find(e=>e.id===parseInt(card.dataset.empid));
+        const show = emp && (!s||emp.name.toLowerCase().includes(s)) && (!d||emp.department===d);
+        card.style.display = show ? '' : 'none';
+      });
+    }
+
+    function renderGrid() {
+      const rec = getDayRecord(todayKey);
+      const BTNS = [
+        {s:'Present',lbl:'✅',cls:'att-btn-p'},
+        {s:'Absent', lbl:'❌',cls:'att-btn-a'},
+        {s:'Leave',  lbl:'🏖️',cls:'att-btn-l'},
+        {s:'Half Day',lbl:'⏱',cls:'att-btn-h'}
+      ];
+      document.getElementById('att-grid').innerHTML = employees.map(emp => {
+        const cur = rec[emp.id]||null;
+        const btns = BTNS.map(b=>`<button class="att-btn ${b.cls} ${cur===b.s?'sel':''}" data-e="${emp.id}" data-s="${b.s}" onclick="setStatus(${emp.id},'${b.s}')" title="${b.s}">${b.lbl}</button>`).join('');
+        return `<div class="att-card" data-empid="${emp.id}">
+          <div class="att-avatar">${getInitials(emp.name)}</div>
+          <div style="min-width:0;flex:1;">
+            <div style="font-weight:600;font-size:.875rem;">${emp.name}</div>
+            <div style="font-size:.75rem;color:#888;">${emp.department} · ${emp.shift||'Morning'}</div>
+          </div>
+          <div style="display:flex;gap:4px;">${btns}</div>
+        </div>`;
+      }).join('');
+      updateStats();
+    }
+
+    function saveAttendance() {
+      const marked = Object.keys(getDayRecord(todayKey)).length;
+      if (!marked) { showToast('Mark at least one employee before saving','warning'); return; }
+      showToast(`Attendance saved for ${marked} employees on ${todayKey}`,'success');
+    }
+
+    function renderHistory() {
+      const month = document.getElementById('hist-month').value;
+      const empF = parseInt(document.getElementById('hist-emp').value)||null;
+      const tbody = document.getElementById('history-tbody');
+      if (!month) { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:2rem;color:#888;">Select a month</td></tr>'; return; }
+      const rows = [];
+      Object.keys(MockData.attendance).forEach(dk => {
+        if (!dk.startsWith(month)) return;
+        Object.keys(MockData.attendance[dk]).forEach(eid => {
+          const id = parseInt(eid);
+          if (empF && id!==empF) return;
+          const emp = MockData.employees.find(e=>e.id===id);
+          if (!emp) return;
+          const status = MockData.attendance[dk][eid];
+          const badges = {Present:'badge-success',Absent:'badge-danger',Leave:'badge-warning','Half Day':'badge-info'};
+          rows.push({dk,emp,status,badge:badges[status]||''});
+        });
+      });
+      rows.sort((a,b)=>b.dk.localeCompare(a.dk));
+      if (!rows.length) { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:2rem;color:#888;">No records for this period</td></tr>'; return; }
+      tbody.innerHTML = rows.map(r=>`<tr><td>${formatDate(r.dk)}</td><td>${r.emp.name}</td><td>${r.emp.department}</td><td>${r.emp.shift||'Morning'}</td><td><span class="badge ${r.badge}">${r.status}</span></td></tr>`).join('');
+    }
+
+    // Init
+    const dateInput = document.getElementById('att-date');
+    dateInput.value = todayKey;
+    document.getElementById('hist-month').value = todayKey.substring(0,7);
+    dateInput.addEventListener('change', () => { todayKey = dateInput.value; renderGrid(); });
+    const histSel = document.getElementById('hist-emp');
+    MockData.employees.forEach(e => { const o=document.createElement('option'); o.value=e.id; o.textContent=e.name; histSel.appendChild(o); });
+    renderGrid();
+  </script>
+</body>
+</html>

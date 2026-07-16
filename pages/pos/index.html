@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Point of Sale — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <style>
+    body { background: var(--bg-subtle); overflow: hidden; }
+    .main-wrapper { padding: 0; min-height: 100vh; }
+    #topbar-container { display: none; /* Hide standard topbar for POS */ }
+    #sidebar-container { display: none; /* Hide sidebar for POS */ }
+    
+    .pos-layout {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Left: Product Catalog */
+    .pos-catalog {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: white;
+      border-right: 1px solid var(--border);
+    }
+    .pos-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--primary);
+      color: white;
+    }
+    .pos-header-actions { display: flex; gap: 0.75rem; align-items: center; }
+    .pos-header-actions .btn { background: rgba(255,255,255,0.2); color: white; border: none; }
+    .pos-header-actions .btn:hover { background: rgba(255,255,255,0.3); }
+
+    .pos-filters {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 1rem;
+      background: var(--bg-subtle);
+    }
+    .pos-grid {
+      flex: 1;
+      padding: 1.5rem;
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1rem;
+      align-content: start;
+    }
+    .product-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+      background: white;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      height: 160px;
+      user-select: none;
+    }
+    .product-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--primary);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .product-card:active { transform: translateY(0); }
+    .p-sku { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .p-name { font-weight: 600; font-size: 0.95rem; margin-bottom: auto; line-height: 1.3; }
+    .p-price { font-weight: 700; color: var(--primary); font-size: 1.1rem; margin-top: 0.5rem; }
+    .p-stock { font-size: 0.75rem; color: var(--success); margin-top: 0.25rem; font-weight: 500; }
+    .p-stock.low { color: var(--danger); }
+
+    /* Right: Cart */
+    .pos-cart {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: white;
+    }
+    .cart-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cart-items {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+    }
+    .cart-item {
+      display: grid;
+      grid-template-columns: 1fr 100px 80px;
+      gap: 0.5rem;
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+    }
+    .cart-item-info { font-weight: 500; font-size: 0.9rem; }
+    .cart-item-price { font-size: 0.75rem; color: var(--text-muted); }
+    .qty-ctrl { display: flex; align-items: center; background: var(--bg-subtle); border-radius: 20px; overflow: hidden; border: 1px solid var(--border); }
+    .qty-btn { background: none; border: none; padding: 0.3rem 0.6rem; cursor: pointer; color: var(--text); font-weight: bold; }
+    .qty-btn:hover { background: var(--border); }
+    .qty-val { flex: 1; text-align: center; font-size: 0.85rem; font-weight: 600; width: 30px; }
+    .item-total { text-align: right; font-weight: 600; }
+    .empty-cart { text-align: center; color: var(--text-muted); padding: 3rem 1rem; }
+
+    .cart-summary {
+      padding: 1.5rem;
+      border-top: 1px solid var(--border);
+      background: var(--bg-subtle);
+    }
+    .summary-row { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; }
+    .summary-total { display: flex; justify-content: space-between; margin-top: 1rem; padding-top: 1rem; border-top: 2px dashed #cbd5e1; font-size: 1.5rem; font-weight: 700; color: var(--text); }
+    
+    .pay-btn {
+      margin-top: 1.5rem;
+      width: 100%;
+      padding: 1rem;
+      font-size: 1.1rem;
+      background: var(--success);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(34,197,94,0.2);
+    }
+    .pay-btn:hover { background: #16a34a; }
+    .pay-btn:disabled { background: #9ca3af; cursor: not-allowed; box-shadow: none; }
+  </style>
+</head>
+<body>
+  <div class="pos-layout">
+    
+    <!-- Left: Catalog -->
+    <div class="pos-catalog">
+      <div class="pos-header">
+        <h1 style="font-size:1.25rem;margin:0;">🛒 Point of Sale</h1>
+        <div class="pos-header-actions">
+          <span id="pos-user" style="font-size:0.85rem;margin-right:1rem;opacity:0.9;"></span>
+          <a href="/pages/dashboard.html" class="btn btn-sm">Exit POS</a>
+        </div>
+      </div>
+
+      <div class="pos-filters">
+        <input type="text" class="form-input" id="pos-search" placeholder="🔍 Search product or SKU..." style="flex:1;">
+        <select class="form-select" id="pos-category" style="width:180px;">
+          <option value="">All Categories</option>
+        </select>
+      </div>
+
+      <div class="pos-grid" id="pos-products">
+        <!-- Products injected via JS -->
+      </div>
+    </div>
+
+    <!-- Right: Cart -->
+    <div class="pos-cart">
+      <div class="cart-header">
+        <strong style="font-size:1.1rem;">Current Order</strong>
+        <button class="btn btn-ghost btn-sm" onclick="clearCart()" style="color:var(--danger);">Clear</button>
+      </div>
+
+      <div class="cart-items" id="cart-items">
+        <div class="empty-cart">
+          <div style="font-size:3rem;margin-bottom:1rem;">🛍️</div>
+          <p>Cart is empty</p>
+          <p style="font-size:0.8rem;margin-top:0.5rem;">Click products on the left to add them to the order.</p>
+        </div>
+      </div>
+
+      <div class="cart-summary">
+        <div class="summary-row">
+          <span style="color:var(--text-muted);">Subtotal</span>
+          <span id="cart-subtotal">₹0.00</span>
+        </div>
+        <div class="summary-row">
+          <span style="color:var(--text-muted);">Tax (18%)</span>
+          <span id="cart-tax">₹0.00</span>
+        </div>
+        <div class="summary-total">
+          <span>Total</span>
+          <span id="cart-total" style="color:var(--primary);">₹0.00</span>
+        </div>
+        <button class="pay-btn" id="pay-btn" onclick="openPaymentModal()" disabled>Charge ₹0.00</button>
+      </div>
+    </div>
+
+  </div>
+  
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script>
+    checkAuth();
+    
+    // Setup Header
+    const user = State.getUser();
+    if(user) document.getElementById('pos-user').textContent = \`👤 \${user.name}\`;
+
+    let cart = [];
+    let posProducts = [...MockData.products.filter(p => p.status === 'active')];
+
+    function init() {
+      // Setup Categories
+      const catSel = document.getElementById('pos-category');
+      MockData.categories.forEach(c => {
+        catSel.innerHTML += \`<option value="\${c.id}">\${c.name}</option>\`;
+      });
+
+      // Events
+      document.getElementById('pos-search').addEventListener('input', renderProducts);
+      document.getElementById('pos-category').addEventListener('change', renderProducts);
+
+      renderProducts();
+      renderCart();
+    }
+
+    function renderProducts() {
+      const search = document.getElementById('pos-search').value.toLowerCase();
+      const cat = document.getElementById('pos-category').value;
+
+      const filtered = posProducts.filter(p => {
+        const mSearch = !search || p.name.toLowerCase().includes(search) || p.sku.toLowerCase().includes(search);
+        const mCat = !cat || p.categoryId == cat;
+        return mSearch && mCat;
+      });
+
+      const grid = document.getElementById('pos-products');
+      if (filtered.length === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text-muted);">No products found.</div>';
+        return;
+      }
+
+      grid.innerHTML = filtered.map(p => {
+        const outOfStock = p.stock <= 0;
+        return \`
+        <div class="product-card" style="\${outOfStock ? 'opacity:0.5;pointer-events:none;' : ''}" onclick="addToCart(\${p.id})">
+          <div class="p-sku">\${p.sku}</div>
+          <div class="p-name">\${p.name}</div>
+          <div class="p-price">\${formatCurrency(p.price)}</div>
+          <div class="p-stock \${p.stock < p.minStock ? 'low' : ''}">\${p.stock} in stock</div>
+          \${outOfStock ? '<div style="color:var(--danger);font-size:0.75rem;font-weight:700;margin-top:0.25rem;">Out of Stock</div>' : ''}
+        </div>
+      \`}).join('');
+    }
+
+    function addToCart(productId) {
+      const product = posProducts.find(p => p.id === productId);
+      if (!product || product.stock <= 0) return;
+
+      const existing = cart.find(item => item.productId === productId);
+      if (existing) {
+        if (existing.qty < product.stock) {
+          existing.qty++;
+        } else {
+          showToast('Cannot exceed available stock', 'warning');
+          return;
+        }
+      } else {
+        cart.push({
+          productId: product.id,
+          name: product.name,
+          price: product.price,
+          qty: 1,
+          maxStock: product.stock
+        });
+      }
+      renderCart();
+    }
+
+    function updateQty(productId, delta) {
+      const item = cart.find(i => i.productId === productId);
+      if (!item) return;
+
+      item.qty += delta;
+      if (item.qty <= 0) {
+        cart = cart.filter(i => i.productId !== productId);
+      } else if (item.qty > item.maxStock) {
+        item.qty = item.maxStock;
+        showToast('Cannot exceed available stock', 'warning');
+      }
+      renderCart();
+    }
+
+    function clearCart() {
+      cart = [];
+      renderCart();
+    }
+
+    function renderCart() {
+      const container = document.getElementById('cart-items');
+      const payBtn = document.getElementById('pay-btn');
+
+      if (cart.length === 0) {
+        container.innerHTML = \`
+          <div class="empty-cart">
+            <div style="font-size:3rem;margin-bottom:1rem;">🛍️</div>
+            <p>Cart is empty</p>
+          </div>\`;
+        document.getElementById('cart-subtotal').textContent = '₹0.00';
+        document.getElementById('cart-tax').textContent = '₹0.00';
+        document.getElementById('cart-total').textContent = '₹0.00';
+        payBtn.textContent = 'Charge ₹0.00';
+        payBtn.disabled = true;
+        return;
+      }
+
+      container.innerHTML = cart.map(item => \`
+        <div class="cart-item">
+          <div>
+            <div class="cart-item-info">\${item.name}</div>
+            <div class="cart-item-price">\${formatCurrency(item.price)}</div>
+          </div>
+          <div class="qty-ctrl">
+            <button class="qty-btn" onclick="updateQty(\${item.productId}, -1)">-</button>
+            <div class="qty-val">\${item.qty}</div>
+            <button class="qty-btn" onclick="updateQty(\${item.productId}, 1)">+</button>
+          </div>
+          <div class="item-total">\${formatCurrency(item.price * item.qty)}</div>
+        </div>
+      \`).join('');
+
+      const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      const tax = subtotal * 0.18; // 18% Tax
+      const total = subtotal + tax;
+
+      document.getElementById('cart-subtotal').textContent = formatCurrency(subtotal);
+      document.getElementById('cart-tax').textContent = formatCurrency(tax);
+      document.getElementById('cart-total').textContent = formatCurrency(total);
+      
+      payBtn.textContent = \`Charge \${formatCurrency(total)}\`;
+      payBtn.disabled = false;
+    }
+
+    function openPaymentModal() {
+      if (cart.length === 0) return;
+      const total = cart.reduce((sum, i) => sum + (i.price * i.qty), 0) * 1.18;
+
+      openModal('Payment Process', \`
+        <div style="text-align:center;margin-bottom:1.5rem;">
+          <h2 style="font-size:2rem;color:var(--primary);margin:0;">\${formatCurrency(total)}</h2>
+          <p style="color:var(--text-muted);">Amount Due</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payment Method</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+            <button class="btn btn-outline" style="border-color:var(--primary);color:var(--primary);" onclick="processPayment('Cash')">💵 Cash</button>
+            <button class="btn btn-outline" style="border-color:var(--primary);color:var(--primary);" onclick="processPayment('Card')">💳 Card / POS</button>
+            <button class="btn btn-outline" style="border-color:var(--primary);color:var(--primary);" onclick="processPayment('UPI')">📱 UPI / QR</button>
+            <button class="btn btn-outline" style="border-color:var(--primary);color:var(--primary);" onclick="processPayment('Credit')">📝 Store Credit</button>
+          </div>
+        </div>
+        <div style="margin-top:1.5rem;text-align:center;">
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        </div>
+      \`);
+    }
+
+    function processPayment(method) {
+      // In a real app, send to server. Here we deduct stock and log sale.
+      
+      cart.forEach(item => {
+        const p = MockData.products.find(prod => prod.id === item.productId);
+        if (p) p.stock -= item.qty;
+      });
+
+      const total = cart.reduce((sum, i) => sum + (i.price * i.qty), 0) * 1.18;
+      
+      // Log sale
+      const newId = Math.max(...MockData.sales.map(s => s.id), 0) + 1;
+      MockData.sales.push({
+        id: newId,
+        invoiceNumber: \`INV-\${String(newId).padStart(5,'0')}\`,
+        customerName: 'Walk-in Customer',
+        date: new Date().toISOString(),
+        total: total,
+        status: 'paid',
+        items: [...cart],
+        paymentMethod: method
+      });
+
+      closeModal();
+      clearCart();
+      renderProducts(); // Refresh stock display
+      
+      showToast(\`Payment of \${formatCurrency(total)} via \${method} successful!\`, 'success');
+    }
+
+    init();
+  </script>
+</body>
+</html>

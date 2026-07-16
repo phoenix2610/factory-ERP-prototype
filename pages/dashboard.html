@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Factory ERP</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <link rel="stylesheet" href="../assets/css/sidebar.css" />
+  <link rel="stylesheet" href="../assets/css/components.css" />
+  <!-- Chart.js v4.4.0 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <div class="app-layout">
+
+    <!-- Sidebar injected here -->
+    <div id="sidebar-container"></div>
+
+    <!-- Main content area -->
+    <div class="main-wrapper">
+
+      <!-- Topbar injected here -->
+      <div id="topbar-container"></div>
+
+      <!-- Page content -->
+      <main class="page-content">
+
+        <!-- ─── KPI Cards ─────────────────────────────────────── -->
+        <div class="grid-4" id="kpi-row">
+          <!-- Populated by JS below -->
+        </div>
+
+        <!-- ─── Charts Row ────────────────────────────────────── -->
+        <div class="grid-2 section-gap">
+
+          <!-- Production Output Bar Chart -->
+          <div class="card">
+            <div class="card-header">
+              Production Output — This Week
+              <span class="badge badge-info">Units</span>
+            </div>
+            <div class="card-body">
+              <canvas id="production-chart" height="200"></canvas>
+            </div>
+          </div>
+
+          <!-- Inventory Health Donut -->
+          <div class="card">
+            <div class="card-header">
+              Inventory Health
+              <span class="badge badge-neutral" id="total-sku-badge"></span>
+            </div>
+            <div class="card-body" style="display:flex; align-items:center; justify-content:center;">
+              <canvas id="inventory-donut" height="200" style="max-width:220px;"></canvas>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ─── Sales Trend Line Chart ────────────────────────── -->
+        <div class="section-gap">
+          <div class="card">
+            <div class="card-header">
+              Sales Revenue — Last 7 Days
+              <span class="badge badge-success" id="total-revenue-badge"></span>
+            </div>
+            <div class="card-body">
+              <canvas id="sales-chart" height="100"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── Bottom Row: Activity Feed + Alerts ───────────── -->
+        <div class="grid-2 section-gap">
+
+          <!-- Recent Activity Feed -->
+          <div class="card">
+            <div class="card-header">
+              Recent Activity
+              <a href="#" class="text-sm text-primary">View all</a>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="activity-feed" id="activity-feed" style="padding:16px;">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Alerts Panel -->
+          <div class="card">
+            <div class="card-header">
+              ⚠️ Alerts &amp; Actions
+            </div>
+            <div class="card-body">
+              <div id="alerts-panel">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ─── Work Orders Summary ───────────────────────────── -->
+        <div class="section-gap">
+          <div class="card">
+            <div class="card-header">
+              Work Orders — Status Overview
+              <a href="/pages/production/kanban.html" class="btn btn-ghost btn-sm">Open Kanban →</a>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <table class="table-base table-row-clickable" id="wo-table">
+                <thead>
+                  <tr>
+                    <th>WO Number</th>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Status</th>
+                    <th>Due Date</th>
+                    <th>Dept.</th>
+                  </tr>
+                </thead>
+                <tbody id="wo-tbody">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Shared Components (injected into page by router) -->
+  <div id="modal-container"></div>
+  <div id="toast-area"></div>
+
+  <!-- Scripts -->
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/state.js"></script>
+  <script src="../assets/js/mockdata.js"></script>
+  <script src="../assets/js/utils.js"></script>
+  <script src="../assets/js/router.js"></script>
+
+  <!-- Load modal and toast components manually for dashboard -->
+  <script>
+    // Inline component load for modal + toast
+    (async function loadSharedComponents() {
+      try {
+        const [modalRes, toastRes] = await Promise.all([
+          fetch('../components/modal.html'),
+          fetch('../components/toast.html')
+        ]);
+        document.getElementById('modal-container').innerHTML = await modalRes.text();
+        document.getElementById('toast-area').innerHTML      = await toastRes.text();
+      } catch (e) {
+        console.error('[dashboard] Failed to load modal/toast components:', e);
+      }
+    })();
+  </script>
+
+  <script>
+    // ─── Auth Guard ─────────────────────────────────────────────────
+    const currentUser = checkAuth();
+    setState('currentUser', currentUser);
+
+    // ─── Computed Data ───────────────────────────────────────────────
+
+    const today           = '2024-01-18'; // Demo fixed "today"
+    const todayAttendance = MockData.attendanceLog.filter(a => a.date === today);
+    const presentToday    = todayAttendance.filter(a => a.status === 'present').length;
+
+    const lowStockProducts  = MockData.products.filter(p => p.stock <= p.reorderLevel && p.stock > 0);
+    const outOfStockProducts = MockData.products.filter(p => p.stock === 0);
+    const activeWorkOrders  = MockData.workOrders.filter(w => w.status !== 'completed');
+
+    const inventoryInStock   = MockData.products.filter(p => p.stock > p.reorderLevel).length;
+    const inventoryLowStock  = lowStockProducts.length;
+    const inventoryOutOfStock = outOfStockProducts.length;
+
+    // Weekly sales (from invoices, last 7 days of mock data)
+    const weekRevenue = MockData.invoices
+      .filter(i => i.status === 'paid')
+      .reduce((sum, i) => sum + i.grandTotal, 0);
+
+    // ─── KPI Cards ───────────────────────────────────────────────────
+
+    function renderKPIs() {
+      const kpiRow = document.getElementById('kpi-row');
+      kpiRow.innerHTML = `
+        <div class="kpi-card">
+          <div class="kpi-label">Total Products</div>
+          <div class="kpi-value">${MockData.products.length}</div>
+          <a href="/pages/inventory/index.html" class="kpi-link">View All →</a>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Active Work Orders</div>
+          <div class="kpi-value">${activeWorkOrders.length}</div>
+          <a href="/pages/production/index.html" class="kpi-link">View All →</a>
+        </div>
+
+        <div class="kpi-card kpi-warning">
+          <div class="kpi-label">Low Stock Alerts</div>
+          <div class="kpi-value">${lowStockProducts.length + outOfStockProducts.length}</div>
+          <a href="/pages/inventory/index.html?filter=low-stock" class="kpi-link">View →</a>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Employees Present</div>
+          <div class="kpi-value">${presentToday} <span style="font-size:1rem;font-weight:400;color:var(--text-muted)">/ ${MockData.employees.filter(e => e.status === 'active').length}</span></div>
+          <a href="/pages/employees/attendance.html" class="kpi-link">View →</a>
+        </div>
+      `;
+    }
+
+    // ─── Charts ──────────────────────────────────────────────────────
+
+    function renderProductionChart() {
+      const ctx = document.getElementById('production-chart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+          datasets: [{
+            label: 'Units Produced',
+            data: [42, 58, 35, 64, 52, 28, 18],
+            backgroundColor: '#2563eb',
+            borderRadius: 4,
+            borderSkipped: false
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ${ctx.raw} units`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: '#f1f5f9' },
+              ticks: { color: '#64748b', font: { size: 11 } }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: '#64748b', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    function renderInventoryDonut() {
+      // Badge
+      document.getElementById('total-sku-badge').textContent =
+        MockData.products.length + ' SKUs total';
+
+      const ctx = document.getElementById('inventory-donut').getContext('2d');
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['In Stock', 'Low Stock', 'Out of Stock'],
+          datasets: [{
+            data: [inventoryInStock, inventoryLowStock, inventoryOutOfStock],
+            backgroundColor: ['#16a34a', '#ea580c', '#dc2626'],
+            borderWidth: 0,
+            hoverOffset: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          cutout: '65%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                font: { size: 11 },
+                color: '#64748b',
+                padding: 16
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ${ctx.label}: ${ctx.raw} products`
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderSalesChart() {
+      document.getElementById('total-revenue-badge').textContent =
+        formatCurrency(weekRevenue) + ' total';
+
+      const ctx = document.getElementById('sales-chart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: ['12 Jan', '13 Jan', '14 Jan', '15 Jan', '16 Jan', '17 Jan', '18 Jan'],
+          datasets: [{
+            label: 'Revenue',
+            data: [42000, 97114, 39766, 67526, 202960, 51920, 56640],
+            borderColor: '#16a34a',
+            backgroundColor: 'rgba(22, 163, 74, 0.08)',
+            borderWidth: 2,
+            pointBackgroundColor: '#16a34a',
+            pointRadius: 4,
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ' ' + formatCurrency(ctx.raw)
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: '#f1f5f9' },
+              ticks: {
+                color: '#64748b',
+                font: { size: 11 },
+                callback: (val) => '₹' + (val / 1000).toFixed(0) + 'k'
+              }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: '#64748b', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    // ─── Activity Feed ────────────────────────────────────────────────
+
+    function renderActivityFeed() {
+      const feed = document.getElementById('activity-feed');
+      const items = MockData.activityFeed.slice(0, 8);
+
+      const roleColors = {
+        admin:   'badge-danger',
+        manager: 'badge-info',
+        staff:   'badge-success'
+      };
+
+      feed.innerHTML = items.map(item => `
+        <div class="activity-item">
+          <div class="activity-icon">${getActivityIcon(item.icon)}</div>
+          <div style="flex:1; min-width:0;">
+            <span class="badge ${roleColors[item.role] || 'badge-neutral'}" style="margin-right:6px;">${item.role}</span>
+            <span class="activity-text">${item.action}</span>
+          </div>
+          <span class="activity-time">${item.timestamp}</span>
+        </div>
+      `).join('');
+    }
+
+    function getActivityIcon(icon) {
+      const map = {
+        box:      '📦', factory: '🏭', clipboard: '📋', cart: '🛒',
+        user:     '👤', tag:     '🏷️', truck:    '🚚', warning: '⚠️',
+        invoice:  '🧾', calendar: '📅', check:   '✅', settings: '⚙️',
+        cancel:   '❌'
+      };
+      return map[icon] || '📌';
+    }
+
+    // ─── Alerts Panel ─────────────────────────────────────────────────
+
+    function renderAlerts() {
+      const panel = document.getElementById('alerts-panel');
+
+      // Low stock items (top 3)
+      const lowStockItems = MockData.products
+        .filter(p => p.stock <= p.reorderLevel)
+        .sort((a, b) => a.stock - b.stock)
+        .slice(0, 3);
+
+      // Overdue work orders
+      const overdueWOs = MockData.workOrders
+        .filter(w => w.dueDate < today && w.status !== 'completed')
+        .slice(0, 3);
+
+      // Pending udhaar (top 2 by balance)
+      const pendingUdhaar = MockData.customers
+        .filter(c => c.udhaarBalance > 0)
+        .sort((a, b) => b.udhaarBalance - a.udhaarBalance)
+        .slice(0, 2);
+
+      panel.innerHTML = `
+        <div class="alert-section">
+          <h4>📦 Low Stock Items (${lowStockProducts.length + outOfStockProducts.length})</h4>
+          <ul>
+            ${lowStockItems.map(p => `
+              <li class="${p.stock === 0 ? 'text-danger' : ''}">
+                <strong>${p.name}</strong> — 
+                ${p.stock === 0
+                  ? '<span style="color:var(--danger);font-weight:600;">Out of Stock</span>'
+                  : `${p.stock} ${p.unit}s left`
+                }
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+
+        <div class="alert-section">
+          <h4>🏭 Overdue Work Orders (${overdueWOs.length})</h4>
+          <ul>
+            ${overdueWOs.length > 0
+              ? overdueWOs.map(wo => `
+                  <li class="text-danger">
+                    <strong>${wo.woNumber}</strong> — ${wo.productName}
+                    <span style="color:var(--text-muted);"> (Due: ${formatDate(wo.dueDate)})</span>
+                  </li>
+                `).join('')
+              : '<li style="color:var(--success);">✓ No overdue orders</li>'
+            }
+          </ul>
+        </div>
+
+        <div class="alert-section">
+          <h4>💰 Pending Udhaar</h4>
+          <ul>
+            ${pendingUdhaar.map(c => `
+              <li>
+                <strong>${c.name}</strong> — ${formatCurrency(c.udhaarBalance)}
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      `;
+    }
+
+    // ─── Work Orders Table ────────────────────────────────────────────
+
+    function renderWOTable() {
+      const statusMap = {
+        'pending':      { label: 'Pending',      cls: 'badge-neutral'  },
+        'raw-issued':   { label: 'Raw Issued',   cls: 'badge-warning'  },
+        'cutting':      { label: 'Cutting',      cls: 'badge-warning'  },
+        'assembly':     { label: 'Assembly',     cls: 'badge-info'     },
+        'qc':           { label: 'QC',           cls: 'badge-primary'  },
+        'packed':       { label: 'Packed',       cls: 'badge-success'  },
+        'completed':    { label: 'Completed',    cls: 'badge-success'  }
+      };
+
+      // Show top 8 most recent (non-completed first)
+      const wos = [...MockData.workOrders]
+        .sort((a, b) => {
+          if (a.status === 'completed' && b.status !== 'completed') return 1;
+          if (b.status === 'completed' && a.status !== 'completed') return -1;
+          return b.id - a.id;
+        })
+        .slice(0, 8);
+
+      document.getElementById('wo-tbody').innerHTML = wos.map(wo => {
+        const s = statusMap[wo.status] || { label: wo.status, cls: 'badge-neutral' };
+        const isOverdue = wo.dueDate < today && wo.status !== 'completed';
+        return `
+          <tr onclick="window.location='/pages/production/kanban.html'">
+            <td><strong>${wo.woNumber}</strong></td>
+            <td>${wo.productName}</td>
+            <td>${wo.quantity}</td>
+            <td><span class="badge ${s.cls}">${s.label}</span></td>
+            <td style="${isOverdue ? 'color:var(--danger);font-weight:600;' : ''}">
+              ${formatDate(wo.dueDate)}
+              ${isOverdue ? ' ⚠️' : ''}
+            </td>
+            <td class="text-muted">${wo.assignedDept}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ─── Init All ─────────────────────────────────────────────────────
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderKPIs();
+      renderProductionChart();
+      renderInventoryDonut();
+      renderSalesChart();
+      renderActivityFeed();
+      renderAlerts();
+      renderWOTable();
+    });
+  </script>
+
+</body>
+</html>

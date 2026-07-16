@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Employees — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <style>
+    .filter-row { display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap; margin-bottom:1.25rem; }
+    .filter-row .form-input,
+    .filter-row .form-select { height:38px; padding:0 0.75rem; font-size:0.875rem; }
+    .emp-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.875rem; flex-shrink: 0;
+    }
+    .emp-cell { display:flex; align-items:center; gap:0.75rem; }
+    .shift-badge {
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    }
+    .shift-morning { background:#fef3c7; color:#92400e; }
+    .shift-evening { background:#ede9fe; color:#5b21b6; }
+    .shift-night   { background:#1e293b; color:#94a3b8; }
+    .stat-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.5rem; }
+    @media(max-width:900px){ .stat-cards { grid-template-columns:repeat(2,1fr); } }
+    .stat-card { background:#fff; border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; }
+    .stat-card .stat-number { font-size:1.75rem; font-weight:700; margin:0.25rem 0 0; }
+    .stat-card .stat-label { font-size:0.75rem; color:#888; text-transform:uppercase; letter-spacing:.05em; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <!-- Header -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+        <div>
+          <h1 style="font-size:1.5rem; font-weight:700; margin:0;">Employees</h1>
+          <p style="color:#888; font-size:0.875rem; margin:4px 0 0;">Manage your workforce</p>
+        </div>
+        <a href="/pages/employees/add-employee.html" class="btn btn-primary">+ Add Employee</a>
+      </div>
+
+      <!-- Stats -->
+      <div class="stat-cards" id="stat-cards">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-row">
+        <div style="flex:1; min-width:200px;">
+          <input type="text" class="form-input" id="search-input" placeholder="🔍  Search by name, ID or phone..." oninput="debouncedSearch(this.value)" style="width:100%;">
+        </div>
+        <select class="form-select" id="dept-filter" onchange="applyFilters()" style="min-width:160px;">
+          <option value="">All Departments</option>
+          <option>Production</option>
+          <option>QC</option>
+          <option>Dispatch</option>
+          <option>Inventory</option>
+          <option>HR</option>
+        </select>
+        <select class="form-select" id="status-filter" onchange="applyFilters()" style="min-width:140px;">
+          <option value="">All Status</option>
+          <option>Active</option>
+          <option>Inactive</option>
+        </select>
+        <select class="form-select" id="shift-filter" onchange="applyFilters()" style="min-width:140px;">
+          <option value="">All Shifts</option>
+          <option>Morning</option>
+          <option>Evening</option>
+          <option>Night</option>
+        </select>
+      </div>
+
+      <!-- Table -->
+      <div class="card">
+        <div class="card-body" style="padding:0; overflow-x:auto;">
+          <table class="table-base">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Emp ID</th>
+                <th>Role</th>
+                <th>Department</th>
+                <th>Shift</th>
+                <th>Salary</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="emp-tbody"></tbody>
+          </table>
+        </div>
+        <div class="card-body" style="padding:0.75rem 1.25rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:0.875rem; color:#888;" id="result-count"></span>
+          <div style="display:flex; gap:0.5rem;" id="pagination-controls"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    let allEmps = [];
+    let filteredEmps = [];
+    let currentPage = 1;
+    const PAGE_SIZE = 10;
+
+    const debouncedSearch = debounce(() => applyFilters(), 300);
+
+    function getInitials(name) {
+      return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+    }
+
+    function getShiftClass(shift) {
+      return { 'Morning': 'shift-morning', 'Evening': 'shift-evening', 'Night': 'shift-night' }[shift] || '';
+    }
+
+    function renderStats() {
+      const total = allEmps.length;
+      const active = allEmps.filter(e => e.status === 'Active').length;
+      const depts = [...new Set(allEmps.map(e => e.department))].length;
+      const avgSalary = allEmps.length ? Math.round(allEmps.reduce((s, e) => s + (e.salary || 0), 0) / allEmps.length) : 0;
+
+      document.getElementById('stat-cards').innerHTML = \`
+        <div class="stat-card">
+          <div class="stat-label">👥 Total Employees</div>
+          <div class="stat-number">\${total}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">✅ Active</div>
+          <div class="stat-number" style="color:var(--success, #22c55e);">\${active}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">🏢 Departments</div>
+          <div class="stat-number">\${depts}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">💰 Avg. Salary</div>
+          <div class="stat-number">\${formatCurrency(avgSalary)}</div>
+        </div>
+      \`;
+    }
+
+    function applyFilters() {
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const dept = document.getElementById('dept-filter').value;
+      const status = document.getElementById('status-filter').value;
+      const shift = document.getElementById('shift-filter').value;
+
+      filteredEmps = allEmps.filter(e => {
+        const matchSearch = !search ||
+          e.name.toLowerCase().includes(search) ||
+          (e.empId || '').toLowerCase().includes(search) ||
+          (e.phone || '').includes(search);
+        const matchDept = !dept || e.department === dept;
+        const matchStatus = !status || e.status === status;
+        const matchShift = !shift || e.shift === shift;
+        return matchSearch && matchDept && matchStatus && matchShift;
+      });
+
+      currentPage = 1;
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('emp-tbody');
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const page = filteredEmps.slice(start, start + PAGE_SIZE);
+      const user = getCurrentUser();
+
+      document.getElementById('result-count').textContent =
+        \`Showing \${Math.min(start + 1, filteredEmps.length)}–\${Math.min(start + PAGE_SIZE, filteredEmps.length)} of \${filteredEmps.length} employees\`;
+
+      if (page.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="8" style="text-align:center; padding:2rem; color:#888;">No employees found</td></tr>\`;
+        renderPagination();
+        return;
+      }
+
+      tbody.innerHTML = page.map(emp => \`
+        <tr>
+          <td>
+            <div class="emp-cell">
+              <div class="emp-avatar">\${getInitials(emp.name)}</div>
+              <div>
+                <div style="font-weight:600;">\${emp.name}</div>
+                <div style="font-size:0.75rem; color:#888;">\${emp.phone || '—'}</div>
+              </div>
+            </div>
+          </td>
+          <td><code style="font-size:0.8rem; background:var(--bg); padding:2px 6px; border-radius:4px;">\${emp.empId || '—'}</code></td>
+          <td>\${emp.role}</td>
+          <td>\${emp.department}</td>
+          <td><span class="shift-badge \${getShiftClass(emp.shift)}">\${emp.shift}</span></td>
+          <td>\${formatCurrency(emp.salary || 0)}</td>
+          <td><span class="badge \${emp.status === 'Active' ? 'badge-success' : 'badge-danger'}">\${emp.status}</span></td>
+          <td>
+            <a href="/pages/employees/add-employee.html?id=\${emp.id}" class="btn btn-sm btn-ghost">✏️ Edit</a>
+            \${user.role === 'admin' ? \`<button class="btn btn-sm btn-danger" onclick="toggleStatus(\${emp.id})">\${emp.status === 'Active' ? 'Deactivate' : 'Activate'}</button>\` : ''}
+          </td>
+        </tr>
+      \`).join('');
+
+      renderPagination();
+    }
+
+    function renderPagination() {
+      const totalPages = Math.ceil(filteredEmps.length / PAGE_SIZE);
+      const ctrl = document.getElementById('pagination-controls');
+      if (totalPages <= 1) { ctrl.innerHTML = ''; return; }
+
+      let html = \`<button class="btn btn-sm btn-ghost" onclick="goPage(\${currentPage - 1})" \${currentPage === 1 ? 'disabled' : ''}>← Prev</button>\`;
+      for (let i = 1; i <= totalPages; i++) {
+        html += \`<button class="btn btn-sm \${i === currentPage ? 'btn-primary' : 'btn-ghost'}" onclick="goPage(\${i})">\${i}</button>\`;
+      }
+      html += \`<button class="btn btn-sm btn-ghost" onclick="goPage(\${currentPage + 1})" \${currentPage === totalPages ? 'disabled' : ''}>Next →</button>\`;
+      ctrl.innerHTML = html;
+    }
+
+    function goPage(p) {
+      const totalPages = Math.ceil(filteredEmps.length / PAGE_SIZE);
+      if (p < 1 || p > totalPages) return;
+      currentPage = p;
+      renderTable();
+    }
+
+    function toggleStatus(empId) {
+      const emp = MockData.employees.find(e => e.id === empId);
+      if (!emp) return;
+      openModal('Confirm Status Change', \`
+        <p>Are you sure you want to <strong>\${emp.status === 'Active' ? 'deactivate' : 'activate'}</strong> <strong>\${emp.name}</strong>?</p>
+        <div style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1rem;">
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-danger" onclick="confirmToggle(\${empId})">Confirm</button>
+        </div>
+      \`);
+    }
+
+    function confirmToggle(empId) {
+      const emp = MockData.employees.find(e => e.id === empId);
+      if (!emp) return;
+      emp.status = emp.status === 'Active' ? 'Inactive' : 'Active';
+      showToast(\`\${emp.name} marked as \${emp.status}\`, 'success');
+      closeModal();
+      applyFilters();
+    }
+
+    // Init
+    allEmps = [...MockData.employees];
+    filteredEmps = [...allEmps];
+    renderStats();
+    renderTable();
+  </script>
+</body>
+</html>

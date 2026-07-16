@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Returns — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <style>
+    .tab-bar { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:1.25rem; }
+    .tab-btn { padding:0.625rem 1.25rem; border:none; background:none; cursor:pointer; font-weight:500; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px; transition:color 0.15s; }
+    .tab-btn.active { color:var(--primary); border-bottom-color:var(--primary); }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <div style="margin-bottom:1.5rem;">
+        <h1 class="page-title">↩️ Returns</h1>
+        <p style="color:var(--text-muted);margin-top:0.25rem;">Manage sales returns and purchase returns</p>
+      </div>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('sales', this)">🔁 Sales Returns</button>
+        <button class="tab-btn" onclick="switchTab('purchase', this)">📦 Purchase Returns</button>
+      </div>
+
+      <!-- Sales Returns Tab -->
+      <div class="tab-content active" id="tab-sales">
+        <div class="grid-2" style="gap:1.5rem;align-items:start;">
+          <!-- Form -->
+          <div class="card">
+            <div class="card-header"><strong>New Sales Return</strong></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Select Invoice *</label>
+                <select class="form-select" id="sr-invoice" onchange="loadInvoiceItems()">
+                  <option value="">-- Select Invoice --</option>
+                </select>
+              </div>
+              <div id="sr-items-section" style="display:none;">
+                <div class="form-group">
+                  <label class="form-label">Product to Return *</label>
+                  <select class="form-select" id="sr-product"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Return Quantity *</label>
+                  <input type="number" class="form-input" id="sr-qty" min="1" placeholder="1">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Reason *</label>
+                  <select class="form-select" id="sr-reason">
+                    <option value="Defective">Defective</option>
+                    <option value="Wrong Item">Wrong Item</option>
+                    <option value="Customer Changed Mind">Customer Changed Mind</option>
+                    <option value="Damaged in Transit">Damaged in Transit</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Refund Mode</label>
+                  <select class="form-select" id="sr-refund">
+                    <option value="Cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Store Credit">Store Credit</option>
+                  </select>
+                </div>
+                <button class="btn btn-primary" onclick="submitSalesReturn()" style="width:100%;">Submit Return</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Sales Returns -->
+          <div class="card">
+            <div class="card-header"><strong>Recent Sales Returns</strong></div>
+            <div class="card-body" style="padding:0;">
+              <table class="table-base" style="width:100%;">
+                <thead><tr><th>Invoice</th><th>Product</th><th>Qty</th><th>Reason</th><th>Refund</th><th>Date</th></tr></thead>
+                <tbody id="sr-log-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Purchase Returns Tab -->
+      <div class="tab-content" id="tab-purchase">
+        <div class="grid-2" style="gap:1.5rem;align-items:start;">
+          <!-- Form -->
+          <div class="card">
+            <div class="card-header"><strong>New Purchase Return</strong></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Supplier *</label>
+                <select class="form-select" id="pr-supplier">
+                  <option value="">-- Select Supplier --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Product *</label>
+                <select class="form-select" id="pr-product">
+                  <option value="">-- Select Product --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Return Quantity *</label>
+                <input type="number" class="form-input" id="pr-qty" min="1" placeholder="1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Reason *</label>
+                <select class="form-select" id="pr-reason">
+                  <option value="Defective Goods">Defective Goods</option>
+                  <option value="Wrong Delivery">Wrong Delivery</option>
+                  <option value="Quality Issue">Quality Issue</option>
+                  <option value="Excess Quantity">Excess Quantity</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea class="form-textarea" id="pr-notes" rows="2" placeholder="Additional details..."></textarea>
+              </div>
+              <button class="btn btn-primary" onclick="submitPurchaseReturn()" style="width:100%;">Submit Return</button>
+            </div>
+          </div>
+
+          <!-- Recent Purchase Returns -->
+          <div class="card">
+            <div class="card-header"><strong>Recent Purchase Returns</strong></div>
+            <div class="card-body" style="padding:0;">
+              <table class="table-base" style="width:100%;">
+                <thead><tr><th>Supplier</th><th>Product</th><th>Qty</th><th>Reason</th><th>Date</th></tr></thead>
+                <tbody id="pr-log-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    if (!MockData.salesReturns) MockData.salesReturns = [];
+    if (!MockData.purchaseReturns) MockData.purchaseReturns = [];
+
+    function switchTab(tabName, btn) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(\`tab-\${tabName}\`).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    function init() {
+      // Populate sales invoice dropdown
+      const srSel = document.getElementById('sr-invoice');
+      (MockData.invoices || []).forEach(inv => {
+        const opt = document.createElement('option');
+        opt.value = inv.id;
+        opt.textContent = \`\${inv.invoiceNo || \`INV-\${String(inv.id).padStart(5,'0')}\`} — \${inv.customerName || 'Walk-in'}\`;
+        srSel.appendChild(opt);
+      });
+
+      // Populate supplier dropdown
+      const prSupSel = document.getElementById('pr-supplier');
+      (MockData.suppliers || []).forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        prSupSel.appendChild(opt);
+      });
+
+      // Populate product dropdown for purchase returns
+      const prProdSel = document.getElementById('pr-product');
+      (MockData.products || []).forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        prProdSel.appendChild(opt);
+      });
+
+      renderSalesReturnLog();
+      renderPurchaseReturnLog();
+    }
+
+    function loadInvoiceItems() {
+      const invId = parseInt(document.getElementById('sr-invoice').value);
+      const inv = (MockData.invoices || []).find(i => i.id === invId);
+      const section = document.getElementById('sr-items-section');
+
+      if (!inv) { section.style.display = 'none'; return; }
+
+      section.style.display = 'block';
+      const productSel = document.getElementById('sr-product');
+      productSel.innerHTML = (inv.items || []).map(item =>
+        \`<option value="\${item.name}">\${item.name} (Qty: \${item.qty})</option>\`
+      ).join('');
+    }
+
+    function submitSalesReturn() {
+      const invId = parseInt(document.getElementById('sr-invoice').value);
+      const product = document.getElementById('sr-product').value;
+      const qty = parseInt(document.getElementById('sr-qty').value);
+      const reason = document.getElementById('sr-reason').value;
+      const refund = document.getElementById('sr-refund').value;
+
+      if (!invId || !product || !qty) { showToast('Fill all required fields', 'warning'); return; }
+
+      const inv = (MockData.invoices || []).find(i => i.id === invId);
+      const newId = MockData.salesReturns.length + 1;
+      MockData.salesReturns.push({
+        id: newId,
+        invoiceNo: inv ? (inv.invoiceNo || \`INV-\${String(inv.id).padStart(5,'0')}\`) : '—',
+        invoiceId: invId,
+        productName: product,
+        qty,
+        reason,
+        refundMode: refund,
+        date: new Date().toISOString().split('T')[0],
+      });
+
+      document.getElementById('sr-invoice').value = '';
+      document.getElementById('sr-items-section').style.display = 'none';
+      document.getElementById('sr-qty').value = '';
+      showToast('Sales return recorded!', 'success');
+      renderSalesReturnLog();
+    }
+
+    function submitPurchaseReturn() {
+      const supplierId = document.getElementById('pr-supplier').value;
+      const productId = document.getElementById('pr-product').value;
+      const qty = parseInt(document.getElementById('pr-qty').value);
+      const reason = document.getElementById('pr-reason').value;
+
+      if (!supplierId || !productId || !qty) { showToast('Fill all required fields', 'warning'); return; }
+
+      const supplier = (MockData.suppliers || []).find(s => s.id == supplierId);
+      const product = (MockData.products || []).find(p => p.id == productId);
+      const newId = MockData.purchaseReturns.length + 1;
+      MockData.purchaseReturns.push({
+        id: newId,
+        supplierName: supplier ? supplier.name : 'Unknown',
+        productName: product ? product.name : 'Unknown',
+        qty,
+        reason,
+        notes: document.getElementById('pr-notes').value,
+        date: new Date().toISOString().split('T')[0],
+      });
+
+      document.getElementById('pr-supplier').value = '';
+      document.getElementById('pr-product').value = '';
+      document.getElementById('pr-qty').value = '';
+      document.getElementById('pr-notes').value = '';
+      showToast('Purchase return recorded!', 'success');
+      renderPurchaseReturnLog();
+    }
+
+    function renderSalesReturnLog() {
+      const tbody = document.getElementById('sr-log-tbody');
+      const recent = [...MockData.salesReturns].reverse().slice(0, 10);
+      if (recent.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No returns yet.</td></tr>\`;
+        return;
+      }
+      tbody.innerHTML = recent.map(r => \`
+        <tr>
+          <td>\${r.invoiceNo}</td>
+          <td>\${r.productName}</td>
+          <td>\${r.qty}</td>
+          <td><span class="badge badge-warning">\${r.reason}</span></td>
+          <td>\${r.refundMode}</td>
+          <td>\${formatDate(r.date)}</td>
+        </tr>
+      \`).join('');
+    }
+
+    function renderPurchaseReturnLog() {
+      const tbody = document.getElementById('pr-log-tbody');
+      const recent = [...MockData.purchaseReturns].reverse().slice(0, 10);
+      if (recent.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted);">No returns yet.</td></tr>\`;
+        return;
+      }
+      tbody.innerHTML = recent.map(r => \`
+        <tr>
+          <td>\${r.supplierName}</td>
+          <td>\${r.productName}</td>
+          <td>\${r.qty}</td>
+          <td><span class="badge badge-danger">\${r.reason}</span></td>
+          <td>\${formatDate(r.date)}</td>
+        </tr>
+      \`).join('');
+    }
+
+    init();
+  </script>
+</body>
+</html>

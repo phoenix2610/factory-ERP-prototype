@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <style>
+    .margin-pill { font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:10px;display:inline-block; }
+    .mg-high   { background:#dcfce7;color:#15803d; }
+    .mg-medium { background:#fef3c7;color:#b45309; }
+    .mg-low    { background:#fee2e2;color:#b91c1c; }
+    .price-input { width:100px;text-align:right; }
+    .bulk-bar { background:#1e293b;color:#f1f5f9;border-radius:10px;padding:.875rem 1.25rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <h1 style="font-size:1.5rem;font-weight:700;margin:0;">💰 Pricing</h1>
+          <p style="color:#888;font-size:.875rem;margin:4px 0 0;">Manage product prices and profit margins</p>
+        </div>
+        <button class="btn btn-primary" onclick="saveAllPrices()">💾 Save All Changes</button>
+      </div>
+
+      <!-- Calculator -->
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-header">🧮 Margin Calculator</div>
+        <div class="card-body">
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+            <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+              <label class="form-label">Cost Price (₹)</label>
+              <input type="number" class="form-input" id="calc-cost" placeholder="100" oninput="calcMargin()">
+            </div>
+            <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+              <label class="form-label">Selling Price (₹)</label>
+              <input type="number" class="form-input" id="calc-sell" placeholder="150" oninput="calcMargin()">
+            </div>
+            <div style="flex:1;min-width:140px;padding:.75rem;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:.75rem;color:#888;text-transform:uppercase;">Margin</div>
+              <div style="font-size:1.5rem;font-weight:700;" id="calc-result">—</div>
+            </div>
+            <div style="flex:1;min-width:140px;padding:.75rem;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:.75rem;color:#888;text-transform:uppercase;">Profit/Unit</div>
+              <div style="font-size:1.5rem;font-weight:700;" id="calc-profit">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bulk Update -->
+      <div class="bulk-bar">
+        <span style="font-weight:600;">Bulk Update:</span>
+        <label>Increase by</label>
+        <input type="number" class="form-input price-input" id="bulk-pct" placeholder="%" style="height:34px;">
+        <span>%</span>
+        <button class="btn btn-primary" onclick="bulkUpdate('pct')">Apply %</button>
+        <div style="width:1px;height:28px;background:#334155;"></div>
+        <label>Fixed (₹)</label>
+        <input type="number" class="form-input price-input" id="bulk-fixed" placeholder="₹" style="height:34px;">
+        <button class="btn btn-primary" onclick="bulkUpdate('fixed')">Apply ₹</button>
+      </div>
+
+      <!-- Filters -->
+      <div style="display:flex;gap:.75rem;margin-bottom:1rem;">
+        <input type="text" class="form-input" id="search-input" placeholder="🔍 Search product..." oninput="applyFilters()" style="flex:1;height:38px;">
+        <select class="form-select" id="cat-filter" onchange="applyFilters()" style="min-width:160px;height:38px;"><option value="">All Categories</option></select>
+        <select class="form-select" id="margin-filter" onchange="applyFilters()" style="min-width:160px;height:38px;">
+          <option value="">All Margins</option>
+          <option value="high">High (≥30%)</option>
+          <option value="medium">Medium (15–30%)</option>
+          <option value="low">Low (&lt;15%)</option>
+        </select>
+      </div>
+
+      <!-- Table -->
+      <div class="card">
+        <div class="card-body" style="padding:0;overflow-x:auto;">
+          <table class="table-base">
+            <thead>
+              <tr>
+                <th>Product</th><th>Category</th>
+                <th>Cost Price (₹)</th><th>Selling Price (₹)</th>
+                <th>Margin</th><th>Profit/Unit</th><th>Stock</th>
+              </tr>
+            </thead>
+            <tbody id="pricing-tbody"></tbody>
+          </table>
+        </div>
+        <div style="padding:.75rem 1.25rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:.875rem;color:#888;">
+          <span id="result-count"></span>
+          <span id="total-profit-label"></span>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+    let pricingData = [];
+    let filteredData = [];
+
+    function mgClass(m) { return m>=30?'mg-high':(m>=15?'mg-medium':'mg-low'); }
+
+    function calcMargin() {
+      const cost = parseFloat(document.getElementById('calc-cost').value)||0;
+      const sell = parseFloat(document.getElementById('calc-sell').value)||0;
+      if (!cost||!sell) { document.getElementById('calc-result').textContent='—'; document.getElementById('calc-profit').textContent='—'; return; }
+      const m = ((sell-cost)/sell*100).toFixed(1);
+      const p = (sell-cost).toFixed(2);
+      const el = document.getElementById('calc-result');
+      el.textContent = m+'%';
+      el.style.color = m>=30?'#16a34a':(m>=15?'#b45309':'#dc2626');
+      document.getElementById('calc-profit').textContent = '₹'+p;
+    }
+
+    function applyFilters() {
+      const s = document.getElementById('search-input').value.toLowerCase();
+      const cat = document.getElementById('cat-filter').value;
+      const mf = document.getElementById('margin-filter').value;
+      filteredData = pricingData.filter(p => {
+        const matchS = !s||p.name.toLowerCase().includes(s);
+        const matchC = !cat||p.category===cat;
+        const m = p.price&&p.costPrice?(p.price-p.costPrice)/p.price*100:0;
+        const matchM = !mf||(mf==='high'&&m>=30)||(mf==='medium'&&m>=15&&m<30)||(mf==='low'&&m<15);
+        return matchS&&matchC&&matchM;
+      });
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('pricing-tbody');
+      document.getElementById('result-count').textContent = filteredData.length+' products';
+      let totalProfit = filteredData.reduce((acc,p)=>acc+((p.price||0)-(p.costPrice||0))*(p.stock||0),0);
+      document.getElementById('total-profit-label').textContent = 'Potential profit on stock: '+formatCurrency(totalProfit);
+      if (!filteredData.length) { tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:2rem;color:#888;">No products found</td></tr>'; return; }
+      tbody.innerHTML = filteredData.map(p => {
+        const cost = p.costPrice||0, sell = p.price||0;
+        const m = sell?((sell-cost)/sell*100).toFixed(1):'0.0';
+        const profit = (sell-cost).toFixed(2);
+        return `<tr>
+          <td><strong>${p.name}</strong><br><span style="font-size:.75rem;color:#888;">${p.sku||'—'}</span></td>
+          <td>${p.category||'—'}</td>
+          <td><input type="number" class="form-input price-input" id="cost-${p.id}" value="${cost}" min="0" step=".01" oninput="onPriceChange(${p.id})"></td>
+          <td><input type="number" class="form-input price-input" id="sell-${p.id}" value="${sell}" min="0" step=".01" oninput="onPriceChange(${p.id})"></td>
+          <td><span class="margin-pill ${mgClass(parseFloat(m))}" id="margin-${p.id}">${m}%</span></td>
+          <td id="profit-${p.id}">₹${profit}</td>
+          <td>${p.stock??'—'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function onPriceChange(id) {
+      const cost = parseFloat(document.getElementById('cost-'+id).value)||0;
+      const sell = parseFloat(document.getElementById('sell-'+id).value)||0;
+      const m = sell?((sell-cost)/sell*100).toFixed(1):'0.0';
+      const mEl = document.getElementById('margin-'+id);
+      if (mEl) { mEl.textContent=m+'%'; mEl.className='margin-pill '+mgClass(parseFloat(m)); }
+      const pEl = document.getElementById('profit-'+id);
+      if (pEl) pEl.textContent='₹'+(sell-cost).toFixed(2);
+      const item = pricingData.find(p=>p.id===id);
+      if (item) { item.costPrice=cost; item.price=sell; }
+    }
+
+    function bulkUpdate(type) {
+      if (type==='pct') {
+        const pct = parseFloat(document.getElementById('bulk-pct').value);
+        if (isNaN(pct)) { showToast('Enter a percentage','warning'); return; }
+        pricingData.forEach(p=>{ p.price=parseFloat((p.price*(1+pct/100)).toFixed(2)); });
+        showToast('All prices updated by '+pct+'%','success');
+      } else {
+        const fixed = parseFloat(document.getElementById('bulk-fixed').value);
+        if (isNaN(fixed)) { showToast('Enter a value','warning'); return; }
+        pricingData.forEach(p=>{ p.price=parseFloat((p.price+fixed).toFixed(2)); });
+        showToast('All prices adjusted by ₹'+fixed,'success');
+      }
+      applyFilters();
+    }
+
+    function saveAllPrices() {
+      pricingData.forEach(item => {
+        const prod = MockData.products.find(p=>p.id===item.id);
+        if (prod) { prod.price=item.price; prod.costPrice=item.costPrice; }
+      });
+      showToast('All pricing changes saved!','success');
+    }
+
+    // Init
+    const cats = [...new Set(MockData.products.map(p=>p.category).filter(Boolean))];
+    const catSel = document.getElementById('cat-filter');
+    cats.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; catSel.appendChild(o); });
+    pricingData = MockData.products.map(p=>({...p, costPrice:p.costPrice||Math.round(p.price*0.65)}));
+    filteredData = [...pricingData];
+    renderTable();
+  </script>
+</body>
+</html>

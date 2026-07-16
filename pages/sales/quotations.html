@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Quotations — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <style>
+    .quote-layout { display: grid; grid-template-columns: 1.5fr 1fr; gap: 1.5rem; align-items: start; }
+    .item-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 0.75rem; align-items: end; margin-bottom: 0.75rem; }
+    .margin-indicator { font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; }
+    .margin-ok { background: #dcfce7; color: #15803d; }
+    .margin-danger { background: #fee2e2; color: #b91c1c; }
+    .margin-warning { background: #fef3c7; color: #b45309; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content">
+
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <h1 class="page-title">📝 Sales Quotation Generator</h1>
+          <p style="color:var(--text-muted);margin-top:0.25rem;">Create wholesale proforma quotes with dynamic BOM cost-margin validation</p>
+        </div>
+        <a href="/pages/sales/invoices.html" class="btn btn-ghost">← Back to Invoices</a>
+      </div>
+
+      <div class="quote-layout">
+        
+        <!-- Left: Quotation Builder Form -->
+        <div class="card">
+          <div class="card-header"><strong>Quotation Details</strong></div>
+          <div class="card-body">
+            
+            <div class="form-group">
+              <label class="form-label">Select Client *</label>
+              <select class="form-select" id="quote-customer">
+                <option value="">-- Select B2B Customer --</option>
+              </select>
+            </div>
+
+            <!-- Line Items section -->
+            <div style="margin-top: 1.5rem; margin-bottom: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+              <strong style="display:block; margin-bottom:1rem; font-size: 0.95rem;">Line Items</strong>
+              <div id="line-items-container">
+                <!-- Injected via JS -->
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="addLineItem()">➕ Add Item</button>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Quotation Notes / Terms</label>
+              <textarea class="form-textarea" id="quote-notes" rows="2" placeholder="e.g., Delivery within 10 days. 50% advance, balance on dispatch."></textarea>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Right: Summary Card -->
+        <div class="card" style="position: sticky; top: 1.5rem;">
+          <div class="card-header"><strong>Summary</strong></div>
+          <div class="card-body">
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+              <span style="color:var(--text-muted);">Total Materials BOM Cost</span>
+              <span id="summary-bom-cost">₹0.00</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+              <span style="color:var(--text-muted);">Quoted Subtotal</span>
+              <span id="summary-subtotal">₹0.00</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+              <span style="color:var(--text-muted);">Overall Margin</span>
+              <span id="summary-margin" style="font-weight:700;">—</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+              <span style="color:var(--text-muted);">GST (18% Flat)</span>
+              <span id="summary-gst">₹0.00</span>
+            </div>
+            <hr style="border: 0; border-top: 2px dashed var(--border); margin: 1rem 0;">
+            <div style="display:flex; justify-content:space-between; font-size:1.4rem; font-weight:700;">
+              <span>Grand Total</span>
+              <span id="summary-grand-total" style="color:var(--primary);">₹0.00</span>
+            </div>
+
+            <button class="btn btn-primary" onclick="generateProforma()" style="width:100%; margin-top:1.5rem; padding: 0.875rem;">💾 Generate Proforma Invoice</button>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    let lines = [];
+
+    // Pre-calculate BOM raw material costs for all finished goods
+    const BOM_COST_MAP = {};
+
+    function precalculateBOMCosts() {
+      (MockData.bomEntries || []).forEach(entry => {
+        let sum = 0;
+        (entry.materials || []).forEach(mat => {
+          const rawProd = MockData.products.find(p => p.id === mat.materialId || p.name === mat.materialName);
+          const rawPrice = rawProd ? rawProd.price : 0;
+          sum += mat.qtyPerUnit * rawPrice;
+        });
+        BOM_COST_MAP[entry.productId] = sum;
+      });
+    }
+
+    function init() {
+      precalculateBOMCosts();
+
+      // Populate Customers
+      const custSel = document.getElementById('quote-customer');
+      (MockData.customers || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.name} (Udhaar: ${formatCurrency(c.udhaarBalance)})`;
+        custSel.appendChild(opt);
+      });
+
+      // Add default first item row
+      addLineItem();
+    }
+
+    function addLineItem() {
+      const id = Date.now() + Math.random();
+      lines.push({ id, productId: '', quantity: 1, quotedPrice: 0, bomCostPerUnit: 0 });
+      renderLineItems();
+    }
+
+    function removeLineItem(id) {
+      if (lines.length === 1) {
+        showToast('At least one item is required', 'warning');
+        return;
+      }
+      lines = lines.filter(l => l.id !== id);
+      renderLineItems();
+      calculateTotals();
+    }
+
+    function onProductSelect(id, selectEl) {
+      const prodId = parseInt(selectEl.value);
+      const line = lines.find(l => l.id === id);
+      const product = MockData.products.find(p => p.id === prodId);
+
+      if (line && product) {
+        line.productId = prodId;
+        line.quotedPrice = product.price; // Default to base selling price
+        // Get precalculated BOM cost, or default to cost price (fallback) if raw material
+        line.bomCostPerUnit = BOM_COST_MAP[prodId] || product.costPrice || Math.round(product.price * 0.65);
+      } else if (line) {
+        line.productId = '';
+        line.quotedPrice = 0;
+        line.bomCostPerUnit = 0;
+      }
+
+      renderLineItems();
+      calculateTotals();
+    }
+
+    function onNumberInput(id, field, value) {
+      const line = lines.find(l => l.id === id);
+      if (line) {
+        line[field] = parseFloat(value) || 0;
+      }
+      calculateTotals();
+      
+      // Update margin pill for this row dynamically
+      const marginPill = document.getElementById(`margin-pill-${id}`);
+      if (marginPill && line.quotedPrice > 0) {
+        const margin = ((line.quotedPrice - line.bomCostPerUnit) / line.quotedPrice * 100).toFixed(0);
+        marginPill.textContent = `Margin: ${margin}%`;
+        marginPill.className = `margin-indicator ${margin >= 25 ? 'margin-ok' : margin >= 0 ? 'margin-warning' : 'margin-danger'}`;
+        if (margin < 0) {
+          marginPill.textContent += ' ⚠️ BELOW BOM COST';
+        }
+      }
+    }
+
+    function renderLineItems() {
+      const container = document.getElementById('line-items-container');
+      const productOptions = MockData.products
+        .filter(p => p.category === 'Finished Good') // Only wholesale quotes for finished goods
+        .map(p => `<option value="${p.id}">${p.name} (Base Price: ${formatCurrency(p.price)})</option>`)
+        .join('');
+
+      container.innerHTML = lines.map(line => {
+        const selectId = `prod-select-${line.id}`;
+        const qtyId = `qty-input-${line.id}`;
+        const priceId = `price-input-${line.id}`;
+        
+        const margin = line.quotedPrice > 0 ? ((line.quotedPrice - line.bomCostPerUnit) / line.quotedPrice * 100).toFixed(0) : 0;
+        const marginClass = margin >= 25 ? 'margin-ok' : margin >= 0 ? 'margin-warning' : 'margin-danger';
+        const isBelowBOMCost = margin < 0;
+
+        return `
+          <div class="item-row" id="row-${line.id}">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:0.75rem;">Finished Product</label>
+              <select class="form-select" id="${selectId}" onchange="onProductSelect(${line.id}, this)">
+                <option value="">-- Select Finished Product --</option>
+                ${productOptions}
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:0.75rem;">Quantity</label>
+              <input type="number" class="form-input" id="${qtyId}" min="1" value="${line.quantity}" oninput="onNumberInput(${line.id}, 'quantity', this.value)">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:0.75rem;">Quoted Price (₹)</label>
+              <input type="number" class="form-input" id="${priceId}" min="0" value="${line.quotedPrice}" oninput="onNumberInput(${line.id}, 'quotedPrice', this.value)">
+            </div>
+            <div style="display:flex; flex-direction:column; justify-content:flex-end;">
+              <div id="margin-pill-${line.id}" class="margin-indicator ${marginClass}" style="${line.productId ? '' : 'display:none;'}">
+                Margin: ${margin}% ${isBelowBOMCost ? '⚠️ BELOW BOM COST' : ''}
+              </div>
+              <button class="btn btn-ghost" onclick="removeLineItem(${line.id})" style="color:var(--danger); padding:0.375rem; text-align:right; border:none; margin-top:2px;">🗑️ Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Restore dropdown selections
+      lines.forEach(line => {
+        if (line.productId) {
+          document.getElementById(`prod-select-${line.id}`).value = line.productId;
+        }
+      });
+    }
+
+    function calculateTotals() {
+      let totalBOMCost = 0;
+      let totalSubtotal = 0;
+
+      lines.forEach(line => {
+        totalBOMCost += line.bomCostPerUnit * line.quantity;
+        totalSubtotal += line.quotedPrice * line.quantity;
+      });
+
+      const marginPct = totalSubtotal > 0 ? ((totalSubtotal - totalBOMCost) / totalSubtotal * 100).toFixed(1) : '0.0';
+      const gst = totalSubtotal * 0.18;
+      const grandTotal = totalSubtotal + gst;
+
+      document.getElementById('summary-bom-cost').textContent = formatCurrency(totalBOMCost);
+      document.getElementById('summary-subtotal').textContent = formatCurrency(totalSubtotal);
+      
+      const marginEl = document.getElementById('summary-margin');
+      marginEl.textContent = marginPct + '%';
+      marginEl.style.color = marginPct >= 25 ? '#16a34a' : marginPct >= 0 ? '#b45309' : '#dc2626';
+      
+      document.getElementById('summary-gst').textContent = formatCurrency(gst);
+      document.getElementById('summary-grand-total').textContent = formatCurrency(grandTotal);
+    }
+
+    function generateProforma() {
+      const custId = document.getElementById('quote-customer').value;
+      if (!custId) { showToast('Please select a customer', 'warning'); return; }
+      
+      const invalidLine = lines.find(l => !l.productId || l.quantity <= 0 || l.quotedPrice <= 0);
+      if (invalidLine) { showToast('Complete all line items', 'warning'); return; }
+
+      const customer = MockData.customers.find(c => c.id == custId);
+      const subtotal = lines.reduce((s, l) => s + l.quantity * l.quotedPrice, 0);
+      const gst = subtotal * 0.18;
+      const grandTotal = subtotal + gst;
+
+      // Mock save & display proforma modal
+      const itemsHtml = lines.map(line => {
+        const prod = MockData.products.find(p => p.id === line.productId);
+        return `
+          <tr>
+            <td><strong>${prod.name}</strong></td>
+            <td>${line.quantity}</td>
+            <td>${formatCurrency(line.quotedPrice)}</td>
+            <td>${formatCurrency(line.quantity * line.quotedPrice)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      openModal(`PROFORMA QUOTATION — Draft`, `
+        <div style="border:1px solid var(--border); padding:1.25rem; border-radius:8px; background:white; font-family:monospace; margin-bottom:1rem;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:1rem;">
+            <div>
+              <h3>FACTORY ERP INDUSTRIES</h3>
+              <p style="font-size:0.75rem; color:var(--text-muted);">GIDC Vatva, Ahmedabad, Gujarat</p>
+            </div>
+            <div style="text-align:right;">
+              <h4 style="color:var(--primary);">PROFORMA INVOICE</h4>
+              <p style="font-size:0.75rem; color:var(--text-muted);">Date: ${new Date().toLocaleDateString('en-GB')}</p>
+            </div>
+          </div>
+          <hr style="border: 0; border-top: 1px solid var(--border); margin:0.75rem 0;">
+          <div style="font-size:0.8rem; margin-bottom:1rem;">
+            <strong>QUOTED TO:</strong><br>
+            ${customer.name}<br>
+            ${customer.address}
+          </div>
+          <table class="table-base" style="width:100%; font-size:0.8rem; margin-bottom:1rem;">
+            <thead><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr></thead>
+            <tbody>${itemsHtml}</tbody>
+          </table>
+          <div style="text-align:right; font-size:0.8rem;">
+            <div>Subtotal: ${formatCurrency(subtotal)}</div>
+            <div>GST (18%): ${formatCurrency(gst)}</div>
+            <div style="font-size:1rem; font-weight:700; color:var(--primary); margin-top:4px;">Grand Total: ${formatCurrency(grandTotal)}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:0.75rem;">
+          <button class="btn btn-success" style="flex:1;" onclick="saveAndWhatsApp()">📱 Share via WhatsApp</button>
+          <button class="btn btn-ghost" style="flex:1;" onclick="closeModal()">Close</button>
+        </div>
+      `);
+    }
+
+    function saveAndWhatsApp() {
+      showToast('Quotation sent to client WhatsApp successfully!', 'success');
+      closeModal();
+      lines = [];
+      document.getElementById('quote-customer').value = '';
+      addLineItem();
+      calculateTotals();
+    }
+
+    init();
+  </script>
+</body>
+</html>

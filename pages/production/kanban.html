@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kanban Board — Factory ERP</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/sidebar.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <style>
+    .kanban-wrapper {
+      display: flex;
+      gap: 1rem;
+      overflow-x: auto;
+      padding-bottom: 1rem;
+      min-height: calc(100vh - 180px);
+    }
+    .kanban-column {
+      min-width: 240px;
+      flex: 0 0 240px;
+      background: var(--bg-subtle, #f8fafc);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 200px);
+    }
+    .kanban-column-header {
+      padding: 0.875rem 1rem;
+      font-weight: 600;
+      font-size: 0.875rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-radius: 12px 12px 0 0;
+      position: sticky;
+      top: 0;
+    }
+    .kanban-cards-area {
+      padding: 0.75rem;
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+    }
+    .kanban-card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      cursor: grab;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      transition: transform 0.15s, box-shadow 0.15s;
+      user-select: none;
+    }
+    .kanban-card:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transform: translateY(-1px);
+    }
+    .kanban-card.dragging {
+      opacity: 0.5;
+      transform: rotate(2deg);
+    }
+    .kanban-card.overdue {
+      border-left: 3px solid var(--danger);
+    }
+    .kanban-column.drag-over {
+      background: var(--primary-light, #eff6ff);
+      border-color: var(--primary);
+    }
+    .wo-number { font-weight: 700; font-size: 0.8rem; color: var(--primary); margin-bottom: 0.25rem; }
+    .wo-product { font-weight: 500; font-size: 0.875rem; margin-bottom: 0.375rem; }
+    .wo-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; justify-content: space-between; }
+    .wo-dept { font-size: 0.75rem; margin-top: 0.375rem; }
+    .dept-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; font-weight: 500; }
+    .empty-column { text-align: center; color: var(--text-muted); padding: 2rem 0.5rem; font-size: 0.8rem; }
+    .col-count-badge { background: var(--primary); color: white; border-radius: 20px; padding: 1px 8px; font-size: 0.75rem; }
+
+    /* Column header colors */
+    .col-pending .kanban-column-header { border-top: 3px solid #94a3b8; border-radius: 9px 9px 0 0; }
+    .col-raw .kanban-column-header { border-top: 3px solid #f59e0b; }
+    .col-cutting .kanban-column-header { border-top: 3px solid #ef4444; }
+    .col-assembly .kanban-column-header { border-top: 3px solid #8b5cf6; }
+    .col-qc .kanban-column-header { border-top: 3px solid #3b82f6; }
+    .col-packed .kanban-column-header { border-top: 3px solid #06b6d4; }
+    .col-completed .kanban-column-header { border-top: 3px solid #22c55e; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-wrapper">
+    <div id="topbar-container"></div>
+    <main class="page-content" style="overflow:hidden;">
+
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <div>
+          <h1 class="page-title">🗂️ Production Kanban</h1>
+          <p style="color:var(--text-muted);margin-top:0.2rem;font-size:0.875rem;">Drag & drop work orders across stages</p>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:center;">
+          <span style="font-size:0.8rem;color:var(--text-muted);">
+            <span style="color:var(--danger);">■</span> Red border = Overdue
+          </span>
+          <button class="btn btn-primary btn-sm" onclick="openNewWOModal()">+ New Work Order</button>
+          <a href="/pages/production/index.html" class="btn btn-ghost btn-sm">📋 List View</a>
+        </div>
+      </div>
+
+      <!-- Kanban Board -->
+      <div class="kanban-wrapper" id="kanban-board">
+        <!-- Columns rendered by JS -->
+      </div>
+
+    </main>
+  </div>
+  <div id="modal-container"></div>
+  <div id="toast-container"></div>
+
+  <script src="/assets/js/mockdata.js"></script>
+  <script src="/assets/js/state.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/router.js"></script>
+  <script>
+    checkAuth();
+
+    const COLUMNS = [
+      { key: 'pending',   label: '⏳ Pending',          cls: 'col-pending' },
+      { key: 'raw',       label: '📦 Raw Material',      cls: 'col-raw' },
+      { key: 'cutting',   label: '✂️ Cutting',           cls: 'col-cutting' },
+      { key: 'assembly',  label: '🔩 Assembly',           cls: 'col-assembly' },
+      { key: 'qc',        label: '🔍 QC Check',           cls: 'col-qc' },
+      { key: 'packed',    label: '📫 Packed',             cls: 'col-packed' },
+      { key: 'completed', label: '✅ Completed',          cls: 'col-completed' },
+    ];
+
+    const DEPT_COLORS = {
+      'Production': '#dbeafe', 'QC': '#fef3c7', 'Dispatch': '#dcfce7',
+      'Inventory': '#f3e8ff', 'HR': '#fce7f3',
+    };
+
+    const today = new Date();
+
+    function isOverdue(wo) {
+      return wo.dueDate && new Date(wo.dueDate) < today && wo.status !== 'completed';
+    }
+
+    function getDeptBadge(dept) {
+      const bg = DEPT_COLORS[dept] || '#f1f5f9';
+      return \`<span class="dept-badge" style="background:\${bg};">\${dept || 'N/A'}</span>\`;
+    }
+
+    let draggedWoId = null;
+
+    function renderBoard() {
+      const board = document.getElementById('kanban-board');
+      board.innerHTML = '';
+
+      COLUMNS.forEach(col => {
+        const wos = MockData.workOrders.filter(wo => wo.status === col.key);
+
+        const colEl = document.createElement('div');
+        colEl.className = \`kanban-column \${col.cls}\`;
+        colEl.dataset.colKey = col.key;
+
+        colEl.innerHTML = \`
+          <div class="kanban-column-header">
+            <span>\${col.label}</span>
+            <span class="col-count-badge">\${wos.length}</span>
+          </div>
+          <div class="kanban-cards-area" id="col-\${col.key}">
+            \${wos.length === 0 ? '<div class="empty-column">Drop cards here</div>' : ''}
+          </div>
+        \`;
+
+        // Drag-over events on column
+        colEl.addEventListener('dragover', e => {
+          e.preventDefault();
+          colEl.classList.add('drag-over');
+        });
+        colEl.addEventListener('dragleave', () => colEl.classList.remove('drag-over'));
+        colEl.addEventListener('drop', e => {
+          e.preventDefault();
+          colEl.classList.remove('drag-over');
+          if (draggedWoId !== null) {
+            const wo = MockData.workOrders.find(w => w.id == draggedWoId);
+            if (wo) {
+              wo.status = col.key;
+              showToast(\`WO \${wo.woNumber} moved to \${col.label.replace(/[^\\w\\s]/g, '').trim()}\`, 'success');
+              renderBoard();
+            }
+          }
+        });
+
+        const area = colEl.querySelector('.kanban-cards-area');
+        wos.forEach(wo => {
+          const card = document.createElement('div');
+          card.className = \`kanban-card\${isOverdue(wo) ? ' overdue' : ''}\`;
+          card.draggable = true;
+          card.dataset.woId = wo.id;
+          card.innerHTML = \`
+            <div class="wo-number">\${wo.woNumber}</div>
+            <div class="wo-product">\${wo.productName || 'N/A'}</div>
+            <div class="wo-meta">
+              <span>Qty: <strong>\${wo.quantity}</strong></span>
+              <span>\${isOverdue(wo) ? '<span style="color:var(--danger);font-weight:600;">⚠️ Overdue</span>' : formatDate(wo.dueDate)}</span>
+            </div>
+            <div class="wo-dept" style="margin-top:0.5rem;">\${getDeptBadge(wo.assignedDept)}</div>
+          \`;
+
+          card.addEventListener('dragstart', e => {
+            draggedWoId = wo.id;
+            card.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+          });
+          card.addEventListener('dragend', () => {
+            card.classList.remove('dragging');
+            draggedWoId = null;
+          });
+
+          card.addEventListener('click', () => openWODetail(wo));
+          area.appendChild(card);
+        });
+
+        board.appendChild(colEl);
+      });
+    }
+
+    function openWODetail(wo) {
+      openModal(\`Work Order — \${wo.woNumber}\`, \`
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:0.25rem;">WO Number</p>
+            <p style="font-weight:600;">\${wo.woNumber}</p>
+          </div>
+          <div>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:0.25rem;">Status</p>
+            <span class="badge \${wo.status === 'completed' ? 'badge-success' : isOverdue(wo) ? 'badge-danger' : 'badge-info'}">\${wo.status}</span>
+          </div>
+          <div>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:0.25rem;">Product</p>
+            <p style="font-weight:500;">\${wo.productName || 'N/A'}</p>
+          </div>
+          <div>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:0.25rem;">Quantity</p>
+            <p style="font-weight:600;">\${wo.quantity} units</p>
+          </div>
+          <div>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:0.25rem;">Department</p>
+            <p>\${wo.assignedDept || 'N/A'}</p>
+          </div>
+          <div>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:0.25rem;">Due Date</p>
+            <p style="\${isOverdue(wo) ? 'color:var(--danger);font-weight:600;' : ''}">\${formatDate(wo.dueDate)}\${isOverdue(wo) ? ' ⚠️' : ''}</p>
+          </div>
+          <div>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:0.25rem;">Start Date</p>
+            <p>\${formatDate(wo.startDate)}</p>
+          </div>
+          <div>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:0.25rem;">Assigned To</p>
+            <p>\${wo.assignedTo || 'N/A'}</p>
+          </div>
+        </div>
+        \${wo.notes ? \`<div style="margin-top:1rem;padding:0.75rem;background:var(--bg-subtle,#f8fafc);border-radius:8px;"><p style="color:var(--text-muted);font-size:0.8rem;">Notes</p><p style="margin-top:0.25rem;">\${wo.notes}</p></div>\` : ''}
+        <div style="margin-top:1.5rem;display:flex;gap:0.75rem;">
+          <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+        </div>
+      \`);
+    }
+
+    function openNewWOModal() {
+      const productOptions = MockData.products.map(p =>
+        \`<option value="\${p.id}" data-name="\${p.name}">\${p.name}</option>\`
+      ).join('');
+      const depts = ['Production', 'QC', 'Dispatch', 'Inventory'];
+      const deptOptions = depts.map(d => \`<option value="\${d}">\${d}</option>\`).join('');
+      const today = new Date().toISOString().split('T')[0];
+
+      openModal('New Work Order', \`
+        <div class="form-group">
+          <label class="form-label">Product *</label>
+          <select class="form-select" id="wo-product">\${productOptions}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantity *</label>
+          <input type="number" class="form-input" id="wo-qty" min="1" placeholder="e.g. 50">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Assign Department *</label>
+          <select class="form-select" id="wo-dept">\${deptOptions}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Due Date *</label>
+          <input type="date" class="form-input" id="wo-due" value="\${today}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-textarea" id="wo-notes" rows="2" placeholder="Optional..."></textarea>
+        </div>
+        <div style="display:flex;gap:0.75rem;margin-top:1rem;">
+          <button class="btn btn-primary" onclick="createWorkOrder()">Create WO</button>
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        </div>
+      \`);
+    }
+
+    function createWorkOrder() {
+      const productSel = document.getElementById('wo-product');
+      const qty = document.getElementById('wo-qty').value;
+      const dept = document.getElementById('wo-dept').value;
+      const due = document.getElementById('wo-due').value;
+      if (!qty || !due) { showToast('Fill all required fields', 'warning'); return; }
+
+      const productName = productSel.options[productSel.selectedIndex].dataset.name;
+      const newId = Math.max(...MockData.workOrders.map(w => w.id), 0) + 1;
+      const woNum = \`WO-\${String(newId).padStart(4, '0')}\`;
+
+      MockData.workOrders.push({
+        id: newId,
+        woNumber: woNum,
+        productId: parseInt(productSel.value),
+        productName,
+        quantity: parseInt(qty),
+        assignedDept: dept,
+        startDate: new Date().toISOString().split('T')[0],
+        dueDate: due,
+        status: 'pending',
+        notes: document.getElementById('wo-notes').value,
+      });
+
+      closeModal();
+      showToast(\`Work order \${woNum} created!\`, 'success');
+      renderBoard();
+    }
+
+    // Init
+    renderBoard();
+  </script>
+</body>
+</html>
